@@ -1,16 +1,4 @@
 
-(use-package recentf
-  :init
-  (setq recentf-max-saved-items 200)
-  :config
-  (add-hook 'find-file-hook (lambda () (unless recentf-mode
-					 (recentf-mode)
-					 (recentf-track-opened-file))))
-  (add-to-list 'recentf-exclude (expand-file-name package-user-dir))
-  (add-to-list 'recentf-exclude "bookmarks")
-  (add-to-list 'recentf-exclude "COMMIT_EDITMSG\\'")
-  )
-
 ;;;
 ;; UTF-8 as the default coding system
 (when (fboundp 'set-charset-priority)
@@ -32,7 +20,30 @@
 		(setq exec-path-from-shell-check-startup-files nil)
 		(setq exec-path-from-shell-variables '("PATH" "MANPATH" "PYTHONPATH"))
 		(setq exec-path-from-shell-arguments '("-l"))
+		(exec-path-from-shell-initialize)
 		)
 	  )
+
+;; (use-package smartparens
+;;   :init
+;;   (smartparens-global-mode +1)
+;;   )
+
+;; Automatic parenthesis pairing
+(use-package elec-pair
+  :ensure nil
+  :init (add-hook 'after-init-hook 'electric-pair-mode))
+
+(use-package recentf
+  :init
+  (setq recentf-max-saved-items 200)
+  :config
+  (add-hook 'find-file-hook (lambda () (unless recentf-mode
+					 (recentf-mode)
+					 (recentf-track-opened-file))))
+  (add-to-list 'recentf-exclude (expand-file-name package-user-dir))
+  (add-to-list 'recentf-exclude "bookmarks")
+  (add-to-list 'recentf-exclude "COMMIT_EDITMSG\\'")
+  )
 
 (provide 'flywind-basic)  

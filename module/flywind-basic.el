@@ -26,4 +26,13 @@
  make-backup-files nil ; don't create backup ~ files
  )
 
+(when (eq system-type 'darwin)
+	  (use-package exec-path-from-shell
+		:init
+		(setq exec-path-from-shell-check-startup-files nil)
+		(setq exec-path-from-shell-variables '("PATH" "MANPATH" "PYTHONPATH"))
+		(setq exec-path-from-shell-arguments '("-l"))
+		)
+	  )
+
 (provide 'flywind-basic)  

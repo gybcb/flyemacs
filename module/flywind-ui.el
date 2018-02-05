@@ -5,6 +5,11 @@
 (when (and (fboundp 'scroll-bar-mode) scroll-bar-mode)
   (scroll-bar-mode -1))
 
+(when window-system
+  (setq frame-title-format
+		'("%S" (buffer-file-name "%f"
+								 (dired-directory dired-directory "%b")))))
+
 ;; Line and Column
 (setq-default fill-column 80)
 (setq column-number-mode t)
@@ -26,11 +31,7 @@
 
 ;; Revert to built-in linum
 ;; https://github.com/syl20bnr/spacemacs/issues/6104
-(use-package linum-off
-  :after linum
-  :init
-  (setq linum-format "%4d ")
-  (add-hook 'after-init-hook 'global-linum-mode))
+(global-linum-mode)
 
 ;; paren mode
 (setq show-paren-delay 0.1
@@ -39,9 +40,14 @@
 (show-paren-mode)
 
 (use-package smartparens
-  :config
+  :init
   (smartparens-global-mode +1)
-)
+  )
+
+;; indent
+(use-package indent-guide
+  :init
+  (indent-guide-global-mode))
 
 ;; Misc
 (fset 'yes-or-no-p 'y-or-n-p)

@@ -40,18 +40,25 @@
 (require 'flywind-dired)
 (require 'flywind-window)
 (require 'flywind-kill-ring)
+(require 'flywind-neotree)
 
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
+ '(custom-safe-themes
+   (quote
+	("3c83b3676d796422704082049fc38b6966bcad960f896669dfc21a7a37a748fa" default)))
  '(package-selected-packages
    (quote
-	(ivy-rich ibuffer-projectile eyebrowse popwin zoom-window window-numbering ace-window volatile-highlights rainbow-delimiters rainbow-mode highlight-parentheses dired-k dired-rainbow dired exec-path-from-shell smex use-package))))
+	(neotree diminish ivy-hydra counsel-projectile ivy-rich ibuffer-projectile eyebrowse popwin zoom-window window-numbering ace-window volatile-highlights rainbow-delimiters rainbow-mode highlight-parentheses dired-k dired-rainbow dired exec-path-from-shell smex use-package))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  )
+
+(message "Emacs loaded in %.03fs"
+		 (float-time (time-subtract (current-time) before-init-time)))

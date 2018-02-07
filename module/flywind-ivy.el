@@ -27,6 +27,15 @@
 		;; ...but if that ever changes, show their full path
 		ivy-virtual-abbreviate 'full
 		)
+  (with-eval-after-load 'projectile
+	(setq projectile-completion-system 'ivy))
+
+  (with-eval-after-load 'magit
+	(setq magit-completing-read-function 'ivy-completing-read))
+
+  ;; Exact same behaviors as isearch
+  (bind-key "C-w" 'ivy-yank-word ivy-minibuffer-map)
+
   (let ((command
 		 (cond
 		  ((executable-find "rg")
@@ -37,6 +46,11 @@
 
   ;; Enhance M-x
   (use-package smex)
+
+  ;; Additional key bindings for Ivy
+  (use-package ivy-hydra
+	:bind (:map ivy-minibuffer-map
+				("M-o" . ivy-dispatching-done-hydra)))
 
   ;; More friendly display transformer for Ivy
   (use-package ivy-rich
@@ -53,6 +67,17 @@
 								   'ivy-rich-switch-buffer-transformer)
 	  (ivy-set-display-transformer 'counsel-projectile-switch-to-buffer
 								   'ivy-rich-switch-buffer-transformer)))
+
+	;; Ivy integration for Projectile
+  (use-package counsel-projectile
+	:init (counsel-projectile-mode))
+
+  (with-eval-after-load 'counsel-projectile
+	(ivy-set-display-transformer 'counsel-projectile
+								 'ivy-rich-switch-buffer-transformer)
+	(ivy-set-display-transformer 'counsel-projectile-switch-to-buffer
+								 'ivy-rich-switch-buffer-transformer))
+
 
   )
 

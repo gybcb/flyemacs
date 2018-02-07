@@ -1,9 +1,9 @@
 (setq org-agenda-files
-      (list "~/flywind-nas/gtd/work.org"))
+	  (list "~/flywind-nas/gtd/work.org"))
 
 ;; (setq org-todo-keywords
 ;;       '((sequence "TODO(t!)" "NEXT(n)" "WAITTING(w)" "SOMEDAYS(s)" "已安排(e)" "|" "DONE(d@/!)" "ABORT(a@/!)")
-;; 		))
+;;		))
 
 
 ;; ui
@@ -37,9 +37,20 @@
  org-startup-with-inline-images nil
  org-tags-column 0
  org-todo-keywords
- '((sequence "TODO(t!)" "NEXT(n)" "WAITTING(w)" "SOMEDAYS(s)" "已安排(e)" "|" "DONE(d@/!)" "ABORT(a@/!)")
+ '((sequence "TODO(t!)" "NEXT(n)" "WAITTING(w)" "SOMEDAYS(s)" "已安排(e)" "|" "DONE(d@/!)" "ABORT(a@/!)"))
+ org-capture-templates
+ '(("t" "Todo" entry (file+headline "~/flywind-nas/gtd/work.org" "Todo")
+	"** TODO [#B] %?\n %i\n"
+	:empty-line 1))
+ ;; (setq org-columns-default-format "%70ITEM %TODO %3PRIORITY %6TAGS")
+
+ org-agenda-custom-commands
+ '(
+   ("w" . "任务安排")
+   ("wa" "任务安排" todo "TODO")
+   ("wb" "已完成任务" todo "DONE")
    )
- 
+
  ;; org-todo-keywords
  ;; '((sequence "[ ](t)" "[-](p)" "[?](m)" "|" "[X](d)")
  ;;   (sequence "TODO(T)" "|" "DONE(D)")

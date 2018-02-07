@@ -20,7 +20,7 @@
 (use-package doom-themes
   :init (load-theme 'doom-one t))
 
-;; ;; Modeline
+;; Modeline
 ;; (use-package spaceline-config
 ;;   :ensure spaceline
 ;;   :commands (spaceline-spacemacs-theme
@@ -30,7 +30,34 @@
 ;;   (add-hook 'after-init-hook
 ;;			(lambda ()
 ;;			  (spaceline-spacemacs-theme)))
-;;   :config (spaceline-info-mode 1))
+;;   :config
+;;   ;; (setq
+;;   ;;  spaceline-window-numbers-unicode t
+;;   ;;  spaceline-workspace-numbers-unicode t
+;;   ;;  )
+;;   (spaceline-info-mode 1)
+;;   (spaceline-toggle-buffer-encoding-on)
+;;   (use-package diminish
+;;	:init
+;;	(diminish 'counsel-mode)
+;;	(diminish 'ivy-mode)
+;;	(diminish 'rainbow-mode)
+;;	(diminish 'volatile-highlights-mode)
+;;	(diminish 'whitespace-mode)
+;;	(diminish 'eldoc-mode)
+;;	(diminish 'company-mode "C")
+;;	)
+;;   )
+
+(use-package diminish
+  :init
+  (diminish 'counsel-mode)
+  (diminish 'ivy-mode)
+  (diminish 'rainbow-mode)
+  (diminish 'volatile-highlights-mode)
+  (diminish 'whitespace-mode)
+  (diminish 'eldoc-mode)
+  )
 
 (use-package cnfonts
   :init (cnfonts-enable)
@@ -76,7 +103,9 @@
 ;; Highlight indentions
 (use-package indent-guide
   :diminish indent-guide-mode
-  :init (add-hook 'after-init-hook 'indent-guide-global-mode)
+  :init
+  (add-hook 'prog-mode-hook 'indent-guide-mode)
+  ;; (add-hook 'after-init-hook 'indent-guide-global-mode)
   :config (setq indent-guide-delay 0.5))
 
 ;; Colorize color names in buffers

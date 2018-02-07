@@ -1,4 +1,3 @@
-
 ;;;
 ;; UTF-8 as the default coding system
 (when (fboundp 'set-charset-priority)
@@ -46,4 +45,7 @@
   (add-to-list 'recentf-exclude "COMMIT_EDITMSG\\'")
   )
 
-(provide 'flywind-basic)  
+;; 这个命令配合 comment-dwim 基本上能满足所有注释的需求
+(global-set-key (kbd "C-c C-g") 'comment-or-uncomment-region)
+
+(provide 'flywind-basic)

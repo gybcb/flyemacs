@@ -7,6 +7,25 @@
 (defvar flywind-modules-dir (concat flywind-emacs-dir "module/")
   "modules 目录")
 
+(defvar flywind-local-dir (concat flywind-emacs-dir ".local")
+  "Root directory for local Emacs files. Use this as permanent storage for files
+that are safe to share across systems (if this config is symlinked across
+several computers).")
+
+(defvar flywind-etc-dir (concat flywind-local-dir "etc/")
+  "Directory for non-volatile storage.
+
+Use this for files that don't change much, like servers binaries, external
+dependencies or long-term shared data.")
+
+(defvar flywind-cache-dir (concat flywind-local-dir "cache/")
+  "Directory for volatile storage.
+
+Use this for files that change often, like cache files.")
+
+(defvar flywind-packages-dir (concat flywind-local-dir "packages/")
+  "Where package.el and quelpa plugins (and their caches) are stored.")
+
 ;; init melpa
 (require 'package)
 (setq package-archives '(
@@ -41,6 +60,7 @@
 (require 'flywind-window)
 (require 'flywind-kill-ring)
 (require 'flywind-neotree)
+(require 'flywind-projectile)
 
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
@@ -52,7 +72,7 @@
 	("3c83b3676d796422704082049fc38b6966bcad960f896669dfc21a7a37a748fa" default)))
  '(package-selected-packages
    (quote
-	(neotree diminish ivy-hydra counsel-projectile ivy-rich ibuffer-projectile eyebrowse popwin zoom-window window-numbering ace-window volatile-highlights rainbow-delimiters rainbow-mode highlight-parentheses dired-k dired-rainbow dired exec-path-from-shell smex use-package))))
+	(ag neotree diminish ivy-hydra counsel-projectile ivy-rich ibuffer-projectile eyebrowse popwin zoom-window window-numbering ace-window volatile-highlights rainbow-delimiters rainbow-mode highlight-parentheses dired-k dired-rainbow dired exec-path-from-shell smex use-package))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.
@@ -60,5 +80,8 @@
  ;; If there is more than one, they won't work right.
  )
 
-(message "Emacs loaded in %.03fs"
-		 (float-time (time-subtract (current-time) before-init-time)))
+(add-hook 'after-init-hook
+		  '(lambda ()
+			 (message "Emacs loaded in %.03fs"
+					  (float-time (time-subtract (current-time) before-init-time)))
+			 ))

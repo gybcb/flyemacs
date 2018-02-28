@@ -9,6 +9,16 @@
 (setq locale-coding-system   'utf-8)   ; please
 (setq-default buffer-file-coding-system 'utf-8) ; with sugar on top
 
+;; files
+(setq-default
+ abbrev-file-name  (concat flywind-local-dir "abbrev.el")
+ auto-save-list-file-name (concat flywind-cache-dir "autosave")
+ backup-directory-alist (list (cons "." (concat flywind-cache-dir "backup/")))
+ )
+
+(setq visible-bell nil)
+(setq ring-bell-function 'ignore)
+
 (setq-default
  make-backup-files nil ; don't create backup ~ files
  )
@@ -35,7 +45,9 @@
 
 (use-package recentf
   :init
-  (setq recentf-max-saved-items 200)
+  (setq recentf-max-saved-items 200
+		recentf-save-file (concat flywind-cache-dir "recentf")
+		)
   :config
   (add-hook 'find-file-hook (lambda () (unless recentf-mode
 					 (recentf-mode)

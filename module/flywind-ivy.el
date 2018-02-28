@@ -26,6 +26,7 @@
 		;; ivy-use-virtual-buffers nil
 		;; ...but if that ever changes, show their full path
 		ivy-virtual-abbreviate 'full
+		smex-save-file (concat flywind-cache-dir "/smex-items")
 		)
   (with-eval-after-load 'projectile
 	(setq projectile-completion-system 'ivy))

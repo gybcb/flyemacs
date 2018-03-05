@@ -61,6 +61,7 @@ Use this for files that change often, like cache files.")
 (require 'flywind-kill-ring)
 (require 'flywind-neotree)
 (require 'flywind-projectile)
+(require 'flywind-dash)
 
 (custom-set-variables
  ;; custom-set-variables was added by Custom.

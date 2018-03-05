@@ -44,12 +44,12 @@ Use this for files that change often, like cache files.")
 
 ;; init melpa
 (require 'package)
-(setq package-archives '(
-			 ("gnu"      .   "http://elpa.emacs-china.org/gnu/")
-			 ("melpa"    .   "http://elpa.emacs-china.org/melpa/")
-			 ("org"      .   "http://elpa.emacs-china.org/org/")))
-
-(setq package-enable-at-startup nil) ; To prevent initialising twice
+(setq package-user-dir (expand-file-name "elpa" flywind-packages-dir)
+	  package-enable-at-startup nil
+	  package-archives '(
+						 ("gnu"      .   "http://elpa.emacs-china.org/gnu/")
+						 ("melpa"    .   "http://elpa.emacs-china.org/melpa/")
+						 ("org"      .   "http://elpa.emacs-china.org/org/")))
 (package-initialize)
 
 (if (not (package-installed-p 'use-package))

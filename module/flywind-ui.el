@@ -62,10 +62,12 @@
 (use-package cnfonts
   :init (cnfonts-enable)
   :config
-  (setq cnfonts-profiles
-	'("notebook" "desktop"))
-  (setq cnfonts--profiles-steps '(("notebook" . 1)
-				  ("desktop"  . 2))))
+  (setq cnfonts-directory (expand-file-name "cnfont" flywind-etc-dir)
+		cnfonts-profiles '("notebook" "desktop")
+		cnfonts--profiles-steps '(("notebook" . 1)
+								  ("desktop"  . 2))
+		)
+  )
 
 ;; Revert to built-in linum
 ;; https://github.com/syl20bnr/spacemacs/issues/6104

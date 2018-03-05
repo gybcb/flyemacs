@@ -1,7 +1,16 @@
 ;; Manage and navigate projects
 (use-package projectile
   ;; :bind (("C-x p" . projectile-find-file))  ; Cmd-t for Mac and Super-t for Linux
-  :init (add-hook 'after-init-hook 'projectile-mode)
+  :init
+  (add-hook 'after-init-hook 'projectile-mode)
+  (setq projectile-cache-file (concat flywind-cache-dir "projectile.cache")
+		projectile-enable-caching (not noninteractive)
+		projectile-indexing-method 'alien
+		projectile-known-projects-file (concat flywind-cache-dir "projectile.projects")
+		projectile-require-project-root nil
+		projectile-globally-ignored-files '(".DS_Store" "Icon" "TAGS")
+		projectile-globally-ignored-file-suffixes '(".elc" ".pyc" ".o")
+		)
   :config
   (setq projectile-mode-line
 		'(:eval (format "[%s]" (projectile-project-name))))

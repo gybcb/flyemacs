@@ -78,6 +78,7 @@ Use this for files that change often, like cache files.")
 (require 'flywind-neotree)
 (require 'flywind-projectile)
 (require 'flywind-dash)
+(require 'flywind-java)
 
 (custom-set-variables
  ;; custom-set-variables was added by Custom.

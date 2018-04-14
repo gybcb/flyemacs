@@ -49,15 +49,15 @@
 ;;	)
 ;;   )
 
-(use-package diminish
-  :init
-  (diminish 'counsel-mode)
-  (diminish 'ivy-mode)
-  (diminish 'rainbow-mode)
-  (diminish 'volatile-highlights-mode)
-  (diminish 'whitespace-mode)
-  (diminish 'eldoc-mode)
-  )
+;; (use-package diminish
+;;   :init
+;;   (diminish 'counsel-mode)
+;;   (diminish 'ivy-mode)
+;;   (diminish 'rainbow-mode)
+;;   (diminish 'volatile-highlights-mode)
+;;   (diminish 'whitespace-mode)
+;;   (diminish 'eldoc-mode)
+;;   )
 
 (use-package cnfonts
   :init (cnfonts-enable)

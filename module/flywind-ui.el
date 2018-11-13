@@ -84,14 +84,17 @@
 					   (toggle-frame-fullscreen)))))
 
   ;; 非Mac平台直接全屏
-  (require 'fullscreen)
-  (fullscreen))
+  ;;(require 'fullscreen)
+  ;;(fullscreen)
+  )
 
 (setq frame-resize-pixelwise t) ;设置缩放的模式,避免Mac平台最大化窗口以后右边和下边有空隙
 
 (require 'lazycat-theme)
 
 (require 'awesome-tray)
+(setq awesome-tray-active-modules '("location" "buffer-name" "parent-dir"
+									"git" "mode-name" "date"))
 (awesome-tray-mode 1)
 ;; (use-package doom-themes
 ;;   :init (load-theme 'doom-one t))

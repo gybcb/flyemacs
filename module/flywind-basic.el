@@ -60,4 +60,21 @@
 ;; 这个命令配合 comment-dwim 基本上能满足所有注释的需求
 (global-set-key (kbd "C-c C-g") 'comment-or-uncomment-region)
 
+;; (use-package smart-hungry-delete
+;;   :ensure t
+;;   :bind (("<backspace>" . smart-hungry-delete-backward-char)
+;;		 ("C-d" . smart-hungry-delete-forward-char))
+;;   :defer nil ;; dont defer so we can add our functions to hooks
+;;   :config (smart-hungry-delete-add-default-hooks)
+;;   )
+
+(use-package hungry-delete
+  :ensure t
+  :config
+  (global-hungry-delete-mode)
+  )
+
+(add-hook 'prog-mode-hook (lambda () (add-to-list 'write-file-functions 'delete-trailing-whitespace)))
+
+
 (provide 'flywind-basic)

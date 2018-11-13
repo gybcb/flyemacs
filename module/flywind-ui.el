@@ -11,14 +11,90 @@
 
 ;; Line and Column
 (setq-default fill-column 80)
-(setq column-number-mode t)
-(setq line-number-mode t)
+(setq column-number-mode nil)
+
+;; (setq line-number-mode nil)
+
+(dolist (hook (list
+			   'c-mode-common-hook
+			   'c-mode-hook
+			   'emacs-lisp-mode-hook
+			   'lisp-interaction-mode-hook
+			   'lisp-mode-hook
+			   'emms-playlist-mode-hook
+			   'java-mode-hook
+			   'asm-mode-hook
+			   'haskell-mode-hook
+			   'rcirc-mode-hook
+			   'emms-lyrics-mode-hook
+			   'erc-mode-hook
+			   'sh-mode-hook
+			   'makefile-gmake-mode-hook
+			   'python-mode-hook
+			   'js-mode-hook
+			   'html-mode-hook
+			   'css-mode-hook
+			   'apt-utils-mode-hook
+			   'tuareg-mode-hook
+			   'go-mode-hook
+			   'coffee-mode-hook
+			   'qml-mode-hook
+			   'markdown-mode-hook
+			   'slime-repl-mode-hook
+			   'package-menu-mode-hook
+			   'cmake-mode-hook
+			   'php-mode-hook
+			   'web-mode-hook
+			   'coffee-mode-hook
+			   'sws-mode-hook
+			   'jade-mode-hook
+			   'vala-mode-hook
+			   'rust-mode-hook
+			   'ruby-mode-hook
+			   'qmake-mode-hook
+			   'lua-mode-hook
+			   'swift-mode-hook
+			   ))
+  (add-hook hook (lambda () (display-line-numbers-mode))))
+
 
 ;; tab
 (setq-default tab-width 4)
 
-(use-package doom-themes
-  :init (load-theme 'doom-one t))
+(if (featurep 'cocoa)
+	(progn
+	  ;; 在Mac平台, Emacs不能进入Mac原生的全屏模式,否则会导致 `make-frame' 创建时也集成原生全屏属性后造成白屏和左右滑动现象.
+	  ;; 所以先设置 `ns-use-native-fullscreen' 和 `ns-use-fullscreen-animation' 禁止Emacs使用Mac原生的全屏模式.
+	  ;; 而是采用传统的全屏模式, 传统的全屏模式, 只会在当前工作区全屏,而不是切换到Mac那种单独的全屏工作区,
+	  ;; 这样执行 `make-frame' 先关代码或插件时,就不会因为Mac单独工作区左右滑动产生的bug.
+	  ;;
+	  ;; Mac平台下,不能直接使用 `set-frame-parameter' 和 `fullboth' 来设置全屏,
+	  ;; 那样也会导致Mac窗口管理器直接把Emacs窗口扔到单独的工作区, 从而对 `make-frame' 产生同样的Bug.
+	  ;; 所以, 启动的时候通过 `set-frame-parameter' 和 `maximized' 先设置Emacs为最大化窗口状态, 启动5秒以后再设置成全屏状态,
+	  ;; Mac就不会移动Emacs窗口到单独的工作区, 最终解决Mac平台下原生全屏窗口导致 `make-frame' 左右滑动闪烁的问题.
+	  (setq ns-use-native-fullscreen nil)
+	  (setq ns-use-fullscreen-animation nil)
+	  (run-at-time "5sec" nil
+				   (lambda ()
+					 (let ((fullscreen (frame-parameter (selected-frame) 'fullscreen)))
+					   ;; If emacs has in fullscreen status, maximized window first, drag emacs window from Mac's single space.
+					   (when (memq fullscreen '(fullscreen fullboth))
+						 (set-frame-parameter (selected-frame) 'fullscreen 'maximized))
+					   ;; Call `toggle-frame-fullscreen' to fullscreen emacs.
+					   (toggle-frame-fullscreen)))))
+
+  ;; 非Mac平台直接全屏
+  (require 'fullscreen)
+  (fullscreen))
+
+(setq frame-resize-pixelwise t) ;设置缩放的模式,避免Mac平台最大化窗口以后右边和下边有空隙
+
+(require 'lazycat-theme)
+
+(require 'awesome-tray)
+(awesome-tray-mode 1)
+;; (use-package doom-themes
+;;   :init (load-theme 'doom-one t))
 
 ;; Modeline
 ;; (use-package spaceline-config
@@ -71,7 +147,7 @@
 
 ;; Revert to built-in linum
 ;; https://github.com/syl20bnr/spacemacs/issues/6104
-(global-linum-mode)
+;; (global-linum-mode)
 
 ;; ;; paren mode
 ;; (setq show-paren-delay 0.1

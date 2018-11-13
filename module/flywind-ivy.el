@@ -60,14 +60,15 @@
 		  ivy-rich-switch-buffer-align-virtual-buffer nil)
 	(setq ivy-rich-abbreviate-paths t)
 
-	(ivy-set-display-transformer 'ivy-switch-buffer
-								 'ivy-rich-switch-buffer-transformer)
+	;; (ivy-set-display-transformer 'ivy-switch-buffer
+	;;							 'ivy-rich-switch-buffer-transformer)
 
-	(with-eval-after-load 'counsel-projectile
-	  (ivy-set-display-transformer 'counsel-projectile
-								   'ivy-rich-switch-buffer-transformer)
-	  (ivy-set-display-transformer 'counsel-projectile-switch-to-buffer
-								   'ivy-rich-switch-buffer-transformer)))
+	;; (with-eval-after-load 'counsel-projectile
+	;;   (ivy-set-display-transformer 'counsel-projectile
+	;;							   'ivy-rich-switch-buffer-transformer)
+	;;   (ivy-set-display-transformer 'counsel-projectile-switch-to-buffer
+	;;							   'ivy-rich-switch-buffer-transformer))
+	)
 
 	;; Ivy integration for Projectile
   (use-package counsel-projectile
@@ -78,8 +79,6 @@
 								 'ivy-rich-switch-buffer-transformer)
 	(ivy-set-display-transformer 'counsel-projectile-switch-to-buffer
 								 'ivy-rich-switch-buffer-transformer))
-
-
   )
 
 

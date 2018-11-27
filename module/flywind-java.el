@@ -41,50 +41,50 @@
   (require 'exec-path-from-shell)
   (exec-path-from-shell-initialize))
 
-(use-package company-lsp
-  :init
-  (use-package lsp-mode)
-  :config
-  (setq company-lsp-async t)
-  )
+;; (use-package company-lsp
+;;   :init
+;;   (use-package lsp-mode)
+;;   :config
+;;   (setq company-lsp-async t)
+;;   )
 
-(use-package lsp-java
-  :commands lsp-java-enable
-  :init
-  (use-package lsp-mode)
- ;; (use-package lsp-ui)
-  (use-package company-lsp)
-  (setq lsp-java-server-install-dir (concat flywind-cache-dir "eclipse.jdt.ls/server/"))
-  :config
-  (add-hook 'java-mode-hook
-			(lambda ()
-			  (require 'company-lsp)
-			  (require 'lsp-java)
-			  (lsp-java-enable)
-			  (set (make-variable-buffer-local 'company-backends) '(company-lsp))
-			  ))
-;;  (add-hook 'lsp-mode-hook 'lsp-ui-mode)
-  )
+;; (use-package lsp-java
+;;   :commands lsp-java-enable
+;;   :init
+;;   (use-package lsp-mode)
+;;  ;; (use-package lsp-ui)
+;;   (use-package company-lsp)
+;;   (setq lsp-java-server-install-dir (concat flywind-cache-dir "eclipse.jdt.ls/server/"))
+;;   :config
+;;   (add-hook 'java-mode-hook
+;;			(lambda ()
+;;			  (require 'company-lsp)
+;;			  (require 'lsp-java)
+;;			  (lsp-java-enable)
+;;			  (set (make-variable-buffer-local 'company-backends) '(company-lsp))
+;;			  ))
+;; ;;  (add-hook 'lsp-mode-hook 'lsp-ui-mode)
+;;   )
 
-(use-package lsp-python
-  :commands lsp-python-enable
-  :init
-  (use-package lsp-mode)
-;;  (use-package lsp-ui)
-  (use-package company-lsp)
-  :config
-  (add-hook 'python-mode-hook
-			(lambda ()
-			  (require 'lsp-mode)
-			  (require 'company-lsp)
-			  (require 'lsp-python)
-			  (lsp-python-enable)
-			  (set (make-variable-buffer-local 'company-backend) '(company-lsp)
-				   (company-idle-delay nil)
-				   )
-			  ))
-;;  (add-hook 'lsp-mode-hook 'lsp-ui-mode)
-  )
+;; (use-package lsp-python
+;;   :commands lsp-python-enable
+;;   :init
+;;   (use-package lsp-mode)
+;; ;;  (use-package lsp-ui)
+;;   (use-package company-lsp)
+;;   :config
+;;   (add-hook 'python-mode-hook
+;;			(lambda ()
+;;			  (require 'lsp-mode)
+;;			  (require 'company-lsp)
+;;			  (require 'lsp-python)
+;;			  (lsp-python-enable)
+;;			  (set (make-variable-buffer-local 'company-backend) '(company-lsp)
+;;				   (company-idle-delay nil)
+;;				   )
+;;			  ))
+;; ;;  (add-hook 'lsp-mode-hook 'lsp-ui-mode)
+;;   )
 
 ;; (use-package lsp-python
 ;;   :commands lsp-python-enable

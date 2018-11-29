@@ -1,0 +1,6 @@
+[submodule "module/3rdparty/awesome-pair"]
+	path = module/3rdparty/awesome-pair
+	url = https://github.com/manateelazycat/awesome-pair.git
+[submodule "module/3rdparty/awesome-tray"]
+	path = module/3rdparty/awesome-tray
+	url = https://github.com/manateelazycat/awesome-tray.git

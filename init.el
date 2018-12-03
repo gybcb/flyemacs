@@ -92,6 +92,7 @@ Use this for files that change often, like cache files.")
 ;;(require 'flywind-java)
 (require 'flywind-prog)
 (require 'flywind-lsp)
+(require 'flywind-colorrg)
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.

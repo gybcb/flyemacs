@@ -1,6 +1,8 @@
 ;; Manage and navigate projects
 (use-package projectile
   ;; :bind (("C-x p" . projectile-find-file))  ; Cmd-t for Mac and Super-t for Linux
+  :bind (:map projectile-mode-map
+			  ("C-c p" . projectile-command-map))
   :init
   (add-hook 'after-init-hook 'projectile-mode)
   (setq projectile-cache-file (concat flywind-cache-dir "projectile.cache")

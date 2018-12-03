@@ -4,3 +4,6 @@
 [submodule "module/3rdparty/awesome-tray"]
 	path = module/3rdparty/awesome-tray
 	url = https://github.com/manateelazycat/awesome-tray.git
+[submodule "module/3rdparty/color-rg"]
+	path = module/3rdparty/color-rg
+	url = https://github.com/manateelazycat/color-rg.git

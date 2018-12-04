@@ -91,13 +91,26 @@
 (setq frame-resize-pixelwise t) ;设置缩放的模式,避免Mac平台最大化窗口以后右边和下边有空隙
 
 ;; (require 'lazycat-theme)
+;; (use-package doom-themes
+;; 	     :init (load-theme 'doom-nord-light t))
+
 (use-package doom-themes
-  :init (load-theme 'doom-nord-light t))
+  :init (load-theme 'doom-one t))
 
 (require 'awesome-tray)
+;; (setq awesome-tray-active-modules '("location" "buffer-name" "projectile-or-parentdir"
+;; 									"git" "mode-name" "date"))
 (setq awesome-tray-active-modules '("location" "buffer-name" "parent-dir"
 									"git" "mode-name" "date"))
 (awesome-tray-mode 1)
+
+;; (use-package doom-modeline
+;;   :ensure t
+;;   :defer t
+;;   :hook (after-init . doom-modeline-init)
+;;   :config
+;;   (setq doom-modeline-buffer-file-name-style 'relative-from-project)
+;;   )
 
 ;; Modeline
 ;; (use-package spaceline-config

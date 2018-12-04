@@ -87,7 +87,7 @@ Use this for files that change often, like cache files.")
 (require 'flywind-window)
 (require 'flywind-kill-ring)
 (require 'flywind-neotree)
-(require 'flywind-projectile)
+;; (require 'flywind-projectile)
 (require 'flywind-dash)
 ;;(require 'flywind-java)
 (require 'flywind-prog)
@@ -100,7 +100,7 @@ Use this for files that change often, like cache files.")
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
    (quote
-	(company-posframe company-quickhelp doom-themes zoom-window window-numbering volatile-highlights use-package smex smart-hungry-delete rainbow-mode rainbow-delimiters popwin neotree magit lsp-ui lsp-python lsp-java ivy-rich ivy-hydra indent-guide hungry-delete highlight-parentheses eyebrowse exec-path-from-shell easy-kill dired-rainbow dash-at-point counsel-projectile company-lsp cnfonts browse-kill-ring ag ace-window))))
+	(doom-modeline company-posframe company-quickhelp doom-themes zoom-window window-numbering volatile-highlights use-package smex smart-hungry-delete rainbow-mode rainbow-delimiters popwin neotree magit lsp-ui lsp-python lsp-java ivy-rich ivy-hydra indent-guide hungry-delete highlight-parentheses eyebrowse exec-path-from-shell easy-kill dired-rainbow dash-at-point counsel-projectile company-lsp cnfonts browse-kill-ring ag ace-window))))
 (custom-set-faces
  ;; custom-set-faces was added by Custom.
  ;; If you edit it by hand, you could mess it up, so be careful.

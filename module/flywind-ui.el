@@ -4,6 +4,8 @@
 (when (and (fboundp 'scroll-bar-mode) scroll-bar-mode)
   (scroll-bar-mode -1))
 
+(menu-bar-mode -1)
+
 (when window-system
   (setq frame-title-format
 		'("%S" (buffer-file-name "%f"

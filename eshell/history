@@ -1,0 +1,7 @@
+ls
+emerge --search wechat
+sudo emerge --ask net-im/deepin-wine-wechat-work
+sudo etc-update
+sudo emerge --ask net-im/deepin-wine-wechat-work
+sudo emerge -avc net-im/deepin-wine-wechat-work
+sudo emerge -avc 

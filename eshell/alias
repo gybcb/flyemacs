@@ -1,0 +1,5 @@
+alias la ls -al
+alias ll ls -l
+alias d dired $1
+alias fo find-file-other-window $1
+alias f find-file $1

@@ -1,4 +1,8 @@
 .local
+.cache
+elpa
+session*
+transient
 bookmarks
 cookies
 projectile-bookmarks.eld

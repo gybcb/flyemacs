@@ -1,5 +1,5 @@
 (setq org-agenda-files
-	  (list "~/flywind-nas/gtd/work.org"))
+	  (list "~/gtd/work.org"))
 
 ;; (setq org-todo-keywords
 ;;       '((sequence "TODO(t!)" "NEXT(n)" "WAITTING(w)" "SOMEDAYS(s)" "已安排(e)" "|" "DONE(d@/!)" "ABORT(a@/!)")
@@ -39,9 +39,14 @@
  org-todo-keywords
  '((sequence "TODO(t!)" "NEXT(n)" "WAITTING(w)" "SOMEDAYS(s)" "已安排(e)" "|" "DONE(d@/!)" "ABORT(a@/!)"))
  org-capture-templates
- '(("t" "Todo" entry (file+headline "~/flywind-nas/gtd/work.org" "Todo")
-	"** TODO [#B] %?\n %i\n"
-	:empty-line 1))
+ '(
+   ("t" "Todo" entry (file "~/gtd/work.org")
+	"* TODO [#B] %?\n %i\n"
+	:empty-line 1)
+   ;; ("t" "Todo" entry (file+headline "~/gtd/work.org" "Todo")
+   ;;	"** TODO [#B] %?\n %i\n"
+   ;;	:empty-line 1)
+   )
  ;; (setq org-columns-default-format "%70ITEM %TODO %3PRIORITY %6TAGS")
 
  org-agenda-custom-commands

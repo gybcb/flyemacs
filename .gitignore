@@ -3,3 +3,8 @@ bookmarks
 cookies
 projectile-bookmarks.eld
 recentf
+*.
+.cache
+request
+transient
+.lsp-session-v1

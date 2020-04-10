@@ -1,3 +1,5 @@
+;; (require 'aweshell)
+
 ;; Emacs command shell
 (use-package eshell
   :ensure nil

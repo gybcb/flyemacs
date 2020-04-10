@@ -98,7 +98,7 @@
 ;;		 :init (load-theme 'doom-nord-light t))
 
 (if (window-system)
-	(
+	(progn
 	 (use-package doom-themes
 	   :init (load-theme 'doom-one t))
 

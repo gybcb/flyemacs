@@ -10,3 +10,6 @@
 [submodule "module/3rdparty/aweshell"]
 	path = module/3rdparty/aweshell
 	url = https://github.com/manateelazycat/aweshell.git
+[submodule "module/3rdparty/nox"]
+	path = module/3rdparty/nox
+	url = https://github.com/manateelazycat/nox.git

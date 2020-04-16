@@ -46,8 +46,8 @@
   :config
   (setq company-tooltip-align-annotations t ; aligns annotation to the right
 		company-tooltip-limit 12            ; bigger popup window
-		company-idle-delay nil               ; decrease delay before autocompletion popup shows
-		company-echo-delay 0                ; remove annoying blinking
+		company-idle-delay 0.3               ; decrease delay before autocompletion popup shows
+		;;company-echo-delay 0                ; remove annoying blinking
 		company-minimum-prefix-length 2
 		company-require-match nil
 		company-dabbrev-ignore-case nil

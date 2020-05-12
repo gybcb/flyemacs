@@ -33,6 +33,19 @@
 	  wl-message-sort-field-list
 	  (append wl-message-sort-field-list
 			  '("^Reply-To" "^Posted" "^Date" "^Organization")))
+
+	;; ---------------------------------------------------------------------------
+  ;; Summary
+  (setq wl-auto-select-next 'unread
+		wl-summary-width nil
+		wl-summary-weekday-name-lang "en"
+		wl-summary-showto-folder-regexp ".Sent.*"
+		wl-summary-line-format "%T%P%M/%D(%W)%h:%m %[ %17f %]%[%1@%] %t%C%s"
+		wl-message-mode-line-format (propertize "%f" 'face 'powerline-active1)
+		;; Summary threads
+		wl-thread-insert-opened t
+		wl-thread-open-reading-thread t
+		)
   )
 
 (provide 'flywind-email)

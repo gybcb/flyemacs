@@ -51,9 +51,9 @@ Use this for files that change often, like cache files.")
 (setq package-user-dir (expand-file-name "elpa" flywind-packages-dir)
 	  package-enable-at-startup nil
 	  package-archives '(
-						 ("gnu"      .   "http://elpa.emacs-china.org/gnu/")
-						 ("melpa"    .   "http://elpa.emacs-china.org/melpa/")
-						 ("org"      .   "http://elpa.emacs-china.org/org/")))
+						 ("gnu"      .   "http://mirrors.tuna.tsinghua.edu.cn/elpa/gnu/")
+						 ("melpa"    .   "http://mirrors.tuna.tsinghua.edu.cn/elpa/melpa/")
+						 ("org"      .   "http://mirrors.tuna.tsinghua.edu.cn/elpa/org/")))
 (package-initialize)
 
 (if (not (package-installed-p 'use-package))
@@ -105,7 +105,7 @@ Use this for files that change often, like cache files.")
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(xterm-color eshell-z esh-help esh-autosuggest eshell-prompt-extras all-the-icons-dired diredfl dired-rsync dired-quick-sort dired-k company-posframe company-quickhelp doom-themes zoom-window window-numbering volatile-highlights use-package smex smart-hungry-delete rainbow-mode rainbow-delimiters popwin neotree magit lsp-ui lsp-python lsp-java ivy-rich ivy-hydra indent-guide hungry-delete highlight-parentheses eyebrowse exec-path-from-shell easy-kill dired-rainbow dash-at-point counsel-projectile company-lsp cnfonts browse-kill-ring ag ace-window)))
+   '(diminish yasnippet xterm-color eshell-z esh-help esh-autosuggest eshell-prompt-extras all-the-icons-dired diredfl dired-rsync dired-quick-sort dired-k company-posframe company-quickhelp doom-themes zoom-window window-numbering volatile-highlights use-package smex smart-hungry-delete rainbow-mode rainbow-delimiters popwin neotree magit lsp-ui lsp-python lsp-java ivy-rich ivy-hydra indent-guide hungry-delete highlight-parentheses eyebrowse exec-path-from-shell easy-kill dired-rainbow dash-at-point counsel-projectile company-lsp cnfonts browse-kill-ring ag ace-window)))
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.

@@ -8,6 +8,8 @@
 
 ;; ui
 (setq-default
+ org-src-preserve-indentation t
+ org-edit-src-content-indentation 0
  org-log-done nil
  org-adapt-indentation nil
  org-cycle-include-plain-lists t
@@ -23,18 +25,18 @@
  org-hide-emphasis-markers nil
  org-hide-leading-stars t
  org-hide-leading-stars-before-indent-mode t
- org-image-actual-width nil
+;; org-image-actual-width nil
  org-indent-indentation-per-level 2
  org-indent-mode-turns-on-hiding-stars t
- org-pretty-entities nil
- org-pretty-entities-include-sub-superscripts t
+;; org-pretty-entities nil
+;; org-pretty-entities-include-sub-superscripts t
  org-priority-faces
  `((?a . ,(face-foreground 'error))
    (?b . ,(face-foreground 'warning))
    (?c . ,(face-foreground 'success)))
  org-startup-folded t
  org-startup-indented t
- org-startup-with-inline-images nil
+;; org-startup-with-inline-images nil
  org-tags-column 0
  org-todo-keywords
  '((sequence "TODO(t!)" "NEXT(n)" "WAITTING(w)" "SOMEDAYS(s)" "已安排(e)" "|" "DONE(d@/!)" "ABORT(a@/!)"))
@@ -74,5 +76,12 @@
  ;;                                            'default)
  ;;                                        :background nil t))
  )
+
+(org-babel-do-load-languages
+ 'org-babel-load-languages
+ '((emacs-lisp . t)
+;;   (julia . t)
+   (python . t)
+   (jupyter . t)))
 
 (provide 'flywind-org)

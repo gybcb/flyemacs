@@ -10,7 +10,8 @@
 (use-package jupyter
   :ensure t
   :config
-  (org-babel-jupyter-override-src-block "python"))
+  ;;(org-babel-jupyter-override-src-block "python")
+  )
 
 (defun my-python-mode-config ()
   (setq python-indent-offset 4

@@ -51,4 +51,10 @@
 (define-key awesome-pair-mode-map (kbd "M-p") 'awesome-pair-jump-left)
 (define-key awesome-pair-mode-map (kbd "M-:") 'awesome-pair-jump-out-pair-and-newline)
 
+(use-package yaml-mode
+  :init (progn
+		  (add-to-list 'auto-mode-alist '("\\.yml\\'" . yaml-mode))
+		  )
+)
+
 (provide 'flywind-prog)

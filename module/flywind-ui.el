@@ -101,7 +101,7 @@
 	(progn
 	 (use-package doom-themes
 	   ;;:init (load-theme 'doom-one-light t))
-	   :init (load-theme 'doom-solarized-light t))
+	   :init (load-theme 'doom-solarized-dark t))
 
 	 ;; (require 'awesome-tray)
 	 ;; ;; (setq awesome-tray-active-modules '("location" "buffer-name" "projectile-or-parentdir"
@@ -132,8 +132,10 @@
 	   ;; (set-face-attribute 'default nil :font "Sarasa Fixed SC 14")
 	   )
 	 )
-  (load-theme 'wheatgrass)
+  ;;(load-theme 'wheatgrass)
   )
+  )
+
 (use-package doom-modeline
   :ensure t
   :defer t

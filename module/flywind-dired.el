@@ -159,7 +159,7 @@
 			("\\.html?\\'" "open")
 			("\\.md\\'" "open"))))
   (setq dired-omit-files
-		(concat dired-omit-files "\\|^.DS_Store$\\|^.projectile$\\|^.git*\\|^.svn$\\|^.vscode$\\|\\.js\\.meta$\\|\\.meta$\\|\\.elc$\\|^.emacs.*")))
+		(concat dired-omit-files "\\|^.DS_Store$\\|^.projectile$\\|^.git*\\|^.svn$\\|^.vscode$\\|\\.js\\.meta$\\|\\.meta$\\|\\.elc$\\|^.emacs.*\\|@eaDir$")))
 
 (use-package dired-rainbow
   :commands dired-rainbow-define dired-rainbow-define-chmod

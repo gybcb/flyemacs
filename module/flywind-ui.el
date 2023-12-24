@@ -101,7 +101,7 @@
 	(progn
 	 (use-package doom-themes
 	   ;;:init (load-theme 'doom-one-light t))
-	   :init (load-theme 'doom-solarized-light t))
+	   :init (load-theme 'doom-solarized-dark t))
 
 	 ;; (require 'awesome-tray)
 	 ;; ;; (setq awesome-tray-active-modules '("location" "buffer-name" "projectile-or-parentdir"
@@ -126,21 +126,21 @@
 		   ;; (set-face-attribute 'width-font-face nil :font "Sarasa Fixed SC 14")
 		   ;; (setq buffer-face-mode-face 'width-font-face)
 		   ;; (buffer-face-mode))
-		   (set-face-attribute 'org-table  nil  :font "Sarasa Fixed SC 14"
-							   :fontset (create-fontset-from-fontset-spec (concat "-*-*-*-*-*--*-*-*-*-*-*-fontset-orgtable" ",han:Sarasa Fixed SC 14")))
+		   (set-face-attribute 'org-table  nil  :font "Sarasa Fixed SC 18"
+							   :fontset (create-fontset-from-fontset-spec (concat "-*-*-*-*-*--*-*-*-*-*-*-fontset-orgtable" ",han:Sarasa Fixed SC 18")))
 		 (add-hook 'org-mode-hook 'org-buffer-face-mode-variable))
 	   ;; (set-face-attribute 'default nil :font "Sarasa Fixed SC 14")
 	   )
 	 )
-  (load-theme 'wheatgrass)
-  )
-(use-package doom-modeline
-  :ensure t
-  :defer t
-  :hook (after-init . doom-modeline-init)
-  :config
-  (setq doom-modeline-buffer-file-name-style 'relative-from-project)
-  )
+  ;;(load-theme 'wheatgrass)
+  (use-package doom-modeline
+	:ensure t
+	:defer t
+	:hook (after-init . doom-modeline-init)
+	:config
+	(setq doom-modeline-buffer-file-name-style 'relative-from-project)
+	)
+  ))
 
 ;; ;; Modeline
 ;; (use-package spaceline-config

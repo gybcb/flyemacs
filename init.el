@@ -93,11 +93,13 @@ Use this for files that change often, like cache files.")
 ;;(require 'flywind-prog)
 (require 'flywind-lsp)
 (require 'flywind-colorrg)
-(require 'flywind-email)
+;;(require 'flywind-email)
 (require 'flywind-git)
 (require 'flywind-python)
 (require 'flywind-eshell)
 (require 'flywind-shell)
+(require 'flywind-treesit)
+;;(require 'flywind-yaml)
 
 (custom-set-variables
  ;; custom-set-variables was added by Custom.
@@ -105,7 +107,7 @@ Use this for files that change often, like cache files.")
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
  '(package-selected-packages
-   '(diminish yasnippet xterm-color eshell-z esh-help esh-autosuggest eshell-prompt-extras all-the-icons-dired diredfl dired-rsync dired-quick-sort dired-k company-posframe company-quickhelp doom-themes zoom-window window-numbering volatile-highlights use-package smex smart-hungry-delete rainbow-mode rainbow-delimiters popwin neotree magit lsp-ui lsp-python lsp-java ivy-rich ivy-hydra indent-guide hungry-delete highlight-parentheses eyebrowse exec-path-from-shell easy-kill dired-rainbow dash-at-point counsel-projectile company-lsp cnfonts browse-kill-ring ag ace-window)))
+   '(treesit-auto yaml-mode doom-modeline diminish yasnippet xterm-color eshell-z esh-help esh-autosuggest eshell-prompt-extras all-the-icons-dired diredfl dired-rsync dired-quick-sort dired-k company-posframe company-quickhelp doom-themes zoom-window window-numbering volatile-highlights use-package smex smart-hungry-delete rainbow-mode rainbow-delimiters popwin neotree magit lsp-ui lsp-python lsp-java ivy-rich ivy-hydra indent-guide hungry-delete highlight-parentheses eyebrowse exec-path-from-shell easy-kill dired-rainbow dash-at-point counsel-projectile company-lsp cnfonts browse-kill-ring ag ace-window)))
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.

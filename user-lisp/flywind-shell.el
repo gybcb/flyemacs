@@ -4,6 +4,9 @@
 ;;
 ;; ANSI 着色统一交给 xterm-color（因此从 comint-output-filter-functions
 ;; 里移除一次 ansi-color-process-output，避免双重处理）。
+;; 启动成本：multi-term / shell-pop / xterm-color 都靠 :bind/:custom 懒加载，
+;; require 本模块只是设几个变量。
+;; 平台判断就地写 `system-type'，不再有个 flywind-const 模块。
 ;;
 ;;; Code:
 
@@ -11,8 +14,6 @@
   (require 'shell-pop)
   (require 'xterm-color)
   (require 'multi-term))
-
-(require 'flywind-const)
 
 (use-package shell
   :ensure nil
@@ -36,25 +37,26 @@
     (local-set-key [up] #'comint-previous-input)
     (local-set-key [down] #'comint-next-input)
     (local-set-key [S-tab] #'comint-next-matching-input-from-input)
-    (setq-local comint-input-sender #'flywind-shell-simple-send))
+    (setq-local comint-input-sender #'flywind-shell-simple-send)
+    ;; TERM 与着色过滤都在进 shell buffer 时才动，不占启动时间；
+    ;; xterm-color 没有 autoload，到这里才 require。 只挂 preoutput（逐 buffer），
+    ;; 不要再生到全局 comint-output-filter-functions 里去，否则双重着色。
+    (require 'xterm-color)
+    (setenv "TERM" "xterm-256color")
+    (add-hook 'comint-preoutput-filter-functions #'xterm-color-filter nil t))
   :hook ((shell-mode . ansi-color-for-comint-mode-on)
          (shell-mode . flywind-shell-mode-hook))
   :config
   (setq system-uses-terminfo nil)
   (add-hook 'comint-output-filter-functions #'comint-strip-ctrl-m)
-
-  ;; ANSI / 256 色
-  (use-package xterm-color
-    :init
-    (setenv "TERM" "xterm-256color")
-    (setq comint-output-filter-functions
-          (remq 'ansi-color-process-output comint-output-filter-functions))
-    (add-hook 'shell-mode-hook
-              (lambda ()
-                (add-hook 'comint-preoutput-filter-functions
-                          #'xterm-color-filter nil t)))))
+  ;; 内置 ansi-color 不再处理输出：着色由上面 preoutput 里的 xterm-color 负责。
+  (setq comint-output-filter-functions
+        (remq 'ansi-color-process-output comint-output-filter-functions)))
 
 (use-package multi-term
+  ;; multi-term 没有 autoload，而只有 :custom 的 use-package 形式会直接 require。
+  ;; 它只在 shell-pop 拉 ANSI term 时才用得上，所以显式延后。
+  :defer t
   :custom
   (multi-term-program "/bin/zsh"))
 
@@ -66,7 +68,7 @@
   (shell-pop-window-position "bottom")
   :init
   (setq shell-pop-shell-type
-        (if sys/win32p
+        (if (eq system-type 'windows-nt)
             '("eshell" "*eshell*" (lambda () (eshell)))
           '("ansi-term" "*ansi-term*"
             (lambda () (ansi-term shell-pop-term-shell))))))

@@ -35,17 +35,19 @@
 (defvar flywind-bottom-buffer-names
   '("*compilation*" "*Compile-Log*" "*Warnings*" "*Completions*"
     "*Shell Command Output*" "*grep*" "*Occur*" "*xref*" "*rg*"
-    "*ert*" "*nosetests*" "*vc-diff*" "*vc-change-log*" "*Package List*")
+    "*ert*" "*vc-diff*" "*vc-change-log*" "*Package List*"
+    "*flywind-check-config*")
   "以底部 side window 展示的只读/输出类 buffer。")
 
 (defvar flywind-bottom-interactive-buffer-names
-  '("*shell*" "*eshell*" "*Python*" "*term*" "*ansi-term*")
+  '("*shell*" "*eshell*" "*term*" "*ansi-term*" "*terminal*")
   "以底部 side window 展示、但允许切进去输入的交互类 buffer。
 这些不设置 `no-other-window'，否则 `C-x o' 无法进入。")
 
-(defvar flywind-right-buffer-names
-  '("*undo-tree*")
-  "以右侧专用 side window 展示的 buffer 名。")
+(defvar flywind-right-buffer-names nil
+  "以右侧专用 side window 展示的 buffer 名。
+原配置这里只有 *undo-tree*，而 undo-tree 从没装过：空表比留一个不存在的
+buffer 名好。 `display-buffer-alist' 的构造对空表就是不生成条目。")
 
 (defun flywind--buffer-name-regexp (names)
   "把 buffer 名列表 NAMES 编成锚定的正则。"
@@ -69,18 +71,22 @@ REUSABLE 非 nil 时不设 `dedicated'、也不隐藏 mode-line（交互 buffer 
 
 (setq display-buffer-alist
       (append
-       (list
-        (cons (flywind--buffer-name-regexp flywind-bottom-buffer-names)
-              (flywind--side-window-config 'bottom -1 'window-height 0.35))
-        ;; multi-term 的 buffer 名是 *terminal@host-N*，一并归到可交互的底部窗
-        (cons (concat (flywind--buffer-name-regexp flywind-bottom-interactive-buffer-names)
-                      "\\|\\`\\*terminal")
-              (flywind--side-window-config 'bottom -1 'window-height 0.35 t))
-        (cons (flywind--buffer-name-regexp flywind-right-buffer-names)
-              (flywind--side-window-config 'right -1 'window-width 0.3))
-        ;; 只读提示类：更矮一些
-        (cons "\\`\\*\\(?:Help\\|Buffer List\\|WoMan.*\\)\\*\\'"
-              (flywind--side-window-config 'bottom -1 'window-height 0.25)))
+       ;; 空名单直接不生成条目：`regexp-opt' 对空表返回的不是“永不匹配”，
+       ;; 把它拼成 buffer 名正则会把不相干的 buffer 吸进 side window。
+       (delq nil
+             (list
+              (cons (flywind--buffer-name-regexp flywind-bottom-buffer-names)
+                    (flywind--side-window-config 'bottom -1 'window-height 0.35))
+              ;; multi-term 的 buffer 名是 *terminal@host-N*，一并归到可交互的底部窗
+              (cons (concat (flywind--buffer-name-regexp flywind-bottom-interactive-buffer-names)
+                            "\\|\\`\\*terminal")
+                    (flywind--side-window-config 'bottom -1 'window-height 0.35 t))
+              (when flywind-right-buffer-names
+                (cons (flywind--buffer-name-regexp flywind-right-buffer-names)
+                      (flywind--side-window-config 'right -1 'window-width 0.3)))
+              ;; 只读提示类：更矮一些
+              (cons "\\`\\*\\(?:Help\\|Buffer List\\)\\*\\'"
+                    (flywind--side-window-config 'bottom -1 'window-height 0.25))))
        display-buffer-alist))
 
 ;; ---------------------------------------------------------------------------

@@ -4,7 +4,12 @@
 ;;
 ;; 本文件在 site-start.el 之前、任何帧创建与 package 初始化之前被加载
 ;; （Emacs 31 起 site-start.el 早于 early-init.el，但仍在帧创建之前）。
-;; 只放必须最早生效的设置：GC 策略、package.el 配置、签名校验 keyring。
+;; 只放必须最早生效的设置：GC 策略、目录与 exec-path、load-path、package.el 配置。
+;;
+;; 环境变量：不再用 exec-path-from-shell（它要在启动期跑 `bash -l` 子进程，
+;; 是原配置最大的一段固定启动开销）。 macOS GUI 启动确实拿不到 /opt/homebrew/bin，
+;; 而 magit / consult-ripgrep / eglot 拉起 language server 都要用它，所以改成
+;; 静态目录注入：见 `flywind-extra-exec-path'。
 ;;
 ;;; Code:
 
@@ -33,10 +38,6 @@
   (file-name-as-directory (locate-user-emacs-file "user-lisp"))
   "自有配置模块目录（Emacs 31 的 User Lisp directory）。")
 
-(defvar flywind-3rdparty-dir
-  (file-name-as-directory (locate-user-emacs-file "module/3rdparty"))
-  "第三方模块（git submodule）根目录。")
-
 (defvar flywind-local-dir (file-name-as-directory (locate-user-emacs-file ".local"))
   "跳机器共享的本地文件根目录。")
 
@@ -53,29 +54,45 @@
   (unless (file-directory-p dir)
     (make-directory dir t)))
 
+;;;; exec-path：静态注入，不起子进程
+(defcustom flywind-extra-exec-path
+  '("/opt/homebrew/bin" "/opt/homebrew/sbin" "/usr/local/bin" "~/.local/bin")
+  "追加到 `exec-path' 前面的目录。
+用来取代 exec-path-from-shell：magit 要 git、consult-ripgrep 要 rg、
+eglot 要 language server，而 macOS 下从 Dock/Launchpad 启动的 Emacs
+只有 /usr/bin:/bin。 不存在的目录会被跳过。"
+  :type '(repeat directory)
+  :group 'environment)
+
+(defun flywind--activate-extra-exec-path ()
+  "把 `flywind-extra-exec-path' 里存在的目录前置进 `exec-path'，去重。"
+  (let ((fresh (delq nil
+                     (mapcar (lambda (dir)
+                               (let ((expanded (expand-file-name dir)))
+                                 (when (file-directory-p expanded)
+                                   (directory-file-name expanded))))
+                             flywind-extra-exec-path))))
+    (setq exec-path (append fresh
+                            (seq-difference exec-path fresh #'equal)))))
+
+(flywind--activate-extra-exec-path)
+
 ;;;; user-lisp/：关闭自动 scrape
 ;; Emacs 31 默认会在 init.el 之前把 user-lisp/ 里每个 .el 加载一次（ scrape ）：
 ;; 顺序不可控，且那时 ELPA 包尚未激活，模块里的 require 会失败。
-;; 这里只保留 load-path 激活（`prepare-user-lisp t'），字节编译改由
-;; init.el 里的 `flywind-byte-compile-user-lisp' 在启动完成后按需处理。
+;; 这里只保留 load-path 激活（`prepare-user-lisp t'）；字节编译由 init.el 在
+;; `package-initialize' 之后按需处理（只自有配置，没改动零成本）。
 ;; （需重新抓取 autoload cookie 时手动 M-x prepare-user-lisp。）
 (setq user-lisp-auto-scrape nil)
 (add-to-list 'load-path (directory-file-name flywind-user-lisp-dir))
-
-;; 只显式加入真正使用的 3rdparty 目录：递归加入全部子目录会把 nox 自带的
-;; 2019 版 jsonrpc.el、aweshell 自带的 2014 版 exec-path-from-shell.el 前置，
-;; 遮蔽 Emacs 31 内置 jsonrpc 与 ELPA 版 exec-path-from-shell。
-(dolist (sub '("lsp-bridge" "aweshell" "color-rg"))
-  (let ((path (expand-file-name sub flywind-3rdparty-dir)))
-    (when (file-directory-p path)
-      (add-to-list 'load-path path))))
 
 ;;;; package.el：源与目录（此处不 package-initialize，交给 init.el）
 (setq package-enable-at-startup nil
       package-user-dir (locate-user-emacs-file ".local/packages/elpa"))
 
 ;; 全部使用 https；不再配置 org 源（Emacs 31 内置 Org 9.8）。
-;; 不设 `url-proxy-services'：清华镜像直连。
+;; 不设 `url-proxy-services'：清华镜像直连。 装包是手动动作（见 init.el），
+;; 启动期不联网。
 (setq package-archives
       `(("gnu"    . "https://mirrors.tuna.tsinghua.edu.cn/elpa/gnu/")
         ("melpa"  . "https://mirrors.tuna.tsinghua.edu.cn/elpa/melpa/")
@@ -88,8 +105,7 @@
 ;; （native-comp-available-p）=> nil：本机 Homebrew Emacs 31.1 未启用 native compilation，
 ;; 因此不设置 eln 相关项。
 
-;;;; user-lisp/ 的字节编译放在 init.el（package-initialize 之后、加载模块之前）：
-;;;; 那里 ELPA 与 3rdparty 已在 load-path 上，编译期才能看见宏与变量。
+;;;; 字节编译在 init.el：`flywind-byte-compile-config'，只处理自有配置，不扫第三方目录。
 
 (provide 'early-init)
 ;;; early-init.el ends here

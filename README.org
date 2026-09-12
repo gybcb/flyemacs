@@ -1,118 +1,273 @@
 #+TITLE: Emacs 31 配置说明
 #+STARTUP: showall
 
+* 这套配置是什么
+
+只干一件事：**改配置文件**。JSON / JSONC / YAML / TOML / INI / .env /
+nginx.conf / tmux.conf / ssh_config / gitconfig / gitignore / gitattributes /
+各种 .zshrc、.bashrc、.envrc。
+
+两条硬指标：
+
+1. 打开就校验：进 buffer 时 eglot 懒拉起 language server，语法错误当场标出来。
+   只做语法层校验，不查 JSON Schema、不查语义规则。
+2. 启动尽量快：实测 ~0.16s~（暖缓存，~after-init-time - before-init-time~），
+   预算 ~0.6s~。启动期不起子进程、不递归扫 ~.el~、不联网刷包索引。
+
+为此删掉了原来的 IDE 化部分：lsp-bridge、company、yasnippet、neotree、jupyter、
+python 模块、color-rg、aweshell、三个 git submodule —— 细节见文末「已移除」。
+
+架构图见 [[file:ARCH.org][ARCH.org]]。
+
 * 目录结构
 
 #+begin_example
-early-init.el      启动最早期：GC 策略、目录变量、load-path、package.el 源
-init.el            package 初始化、按需字节编译、use-package 默认值、模块装载
-user-lisp/         自有配置模块（flywind-*.el）
-module/3rdparty/   git submodule：lsp-bridge / aweshell / color-rg
+early-init.el      启动最早期：GC 策略、目录变量、exec-path、load-path、package.el
+init.el            package 初始化、包清单、自有文件字节编译、模块装载、体检命令
+user-lisp/         自有配置模块（flywind-*.el，共 9 个）
+tree-sitter/       语法库 .dylib（json/yaml/toml + 历史遗留的 bash/python/java/cpp）
 .local/
   packages/elpa/   package.el 的安装目录（package-user-dir）
-  etc/             非易失：custom.el、savehist、lsp-bridge-venv
-  cache/           易失：backup、auto-save
+  etc/             非易失：custom.el、savehist
+  cache/           易失：backup、auto-save、recentf
 elpa/gnupg/        ELPA 签名校验用的 GPG keyring（保留原位置）
 #+end_example
 
-* 启动流程
+* 模块（~init.el~ 按此顺序 ~require~）
 
-1. ~early-init.el~
-   - 放宽 ~gc-cons-threshold~，启动完成后由 ~after-init-hook~ 恢复
-   - 定义 ~flywind-*-dir~ 目录变量并建目录
-   - 关闭 Emacs 31 的 ~user-lisp-auto-scrape~（它会在 init.el 之前把模块按目录顺序
-     加载一遍，此时 ELPA 尚未激活），只把 ~user-lisp/~ 加入 ~load-path~
-   - 只把真正用到的 3rdparty 目录加入 ~load-path~（避免 nox 的 2019 版 jsonrpc、
-     aweshell 的 2014 版 exec-path-from-shell 遮蔽内置/ELPA 版本）
-   - package.el：~package-user-dir~ 指向 ~.local/packages/elpa~，源用清华 https 镜像，
-     ~package-gnupghome-dir~ 复用 ~elpa/gnupg~
-2. ~init.el~
-   - ~package-initialize~
-   - ~flywind-prepare-lisp~：把过期的 ~user-lisp/~ 与所用 submodule 的 ~.el~ 编成
-     ~.elc~（~byte-recompile-file~ 自己比时间戳，没改动即零成本）
-   - 按依赖顺序 ~require~ 各模块
-   - ~after-init-hook~ 检查缺包并 ~warn~
+| 模块                | 职责                                          | 启动期成本              |
+|---------------------+-----------------------------------------------+-------------------------|
+| ~flywind-basic~     | 基础行为、窗口/文件默认值、kill-ring 合并进来 | 变量赋值                |
+| ~flywind-ui~        | 主题、modeline、行号、视觉细节                | doom-themes 加载        |
+| ~flywind-config~    | **核心**：mode 映射、语法库、eglot 校验          | 只设 hook，不加载 eglot |
+| ~flywind-completion~| vertico / consult / orderless / marginalia    | 常驻                    |
+| ~flywind-dired~     | dired 与着色                                  | ~:defer t~，开 dired 才算 |
+| ~flywind-window~    | windmove / zoom-window / eyebrowse / 分屏规则 | 变量 + autoload         |
+| ~flywind-git~       | magit                                         |  autoload，~C-x g~ 才加载 |
+| ~flywind-shell~     | shell / multi-term / shell-pop / xterm-color  | 全部懒加载              |
+| ~flywind-org~       | Org 外观与键位                                | ~with-eval-after-load~，零成本 |
 
-启动期不联网：不 ~package-refresh-contents~、不 ~:ensure~。
+* 支持的格式与校验
+
+| 格式                | major mode                            | 语法校验              | 依赖的外部程序                   |
+|---------------------+---------------------------------------+-----------------------+----------------------------------|
+| json / jsonc        | ~json-ts-mode~（退路 ~js-json-mode~）   | ✅ ~Property expected~ | ~vscode-json-language-server~    |
+| yaml                | ~yaml-ts-mode~                        | ✅                    | ~yaml-language-server~           |
+| toml                | ~toml-ts-mode~（退路 ~conf-toml-mode~） | ✅                    | ~taplo~ 优先，否则 ~tombi~       |
+| .zshrc / .bashrc / .envrc / *.sh | ~sh-mode~                             | ✅ shellcheck 诊断     | ~bash-language-server~ + ~shellcheck~ |
+| ini / cfg / setup.cfg | ~conf-windows-mode~                  | ❌ 只高亮             | 无                               |
+| .env / nginx.conf / tmux.conf / ssh_config / .gitignore / .gitattributes | ~conf-unix-mode~ | ❌ 只高亮 | 无 |
+| gitconfig           | ~conf-windows-mode~                   | ❌ 只高亮             | 无                               |
+
+后三类没有可靠的 LSP（要么不存在，要么装上就会对 vim 脚本之类的东西乱报），
+所以按设计只给高亮、不拉进程 —— 打开这些文件不会产生任何子进程。
+
+#+begin_note
+JSON 一项需要 ~flywind-config-lsp-settings~：eglot 连上后会 push 一个 settings，
+~vscode-json-language-server~ 把「收到 settings 但 ~json.validate.enable~ 未设」当成
+校验关闭。实测：settings 为空 → 再坏的 JSON 也 0 条诊断；~enable=t~ → 立刻报
+「Property expected」。所以 ~'(:json (:validate (:enable t)))~ 是必需的，别删。
+#+end_note
+
+* 装依赖
+
+配置本身不含外部程序，缺了会怎样都写在 ~M-x flywind-check-config~ 里。
+
+#+begin_example
+# language server（JSON / YAML / TOML / shellcheck 前端）
+npm i -g yaml-language-server vscode-langservers-extracted taplo bash-language-server
+brew install shellcheck
+
+# 语法库：在 Emacs 里执行
+M-x flywind-install-treesit-grammars
+#+end_example
+
+语法库装进 ~tree-sitter/~，需要 cc + ~tree-sitter~ CLI。
+Emacs 31 打开 ~.json~ 时默认会弹「grammar for `json' is missing; install it?」这种
+交互式提问（还会顺带联网），本配置关掉它（~treesit-auto-install-grammar~），
+改由上面那个命令显式安装。
+
+* 主题：自动跟随浅色 / 深色
+
+终端里真正相关的是终端自己的配色板，不是 macOS 的设置：终端是浅色调色板时载深色主题
+很难看。所以判据按环境分开、各自独立：同一台机器可以一边开浅色 Ghostty、一边开深色
+iTerm，缓存按环境分格存，互不顶掉。
+
+| 环境              | 依据                                   | 结果                        |
+|-------------------+----------------------------------------+-----------------------------|
+| GUI               | macOS AppleInterfaceStyle              | 深色 -> doom-solarized-dark  |
+| Ghostty（两档主题） | macOS 外观                        | Dark -> dark            |
+| 其它终端（iTerm） | COLORFGBG 背景色号（iTerm 默认 12;8）  | 8 -> dark                   |
+| 认不出来          | 无信号                                 | 兜底 dark                   |
+
+Ghostty 是个坑，而且坑了两层：
+
+1. 它**不导出 COLORFGBG**（shell-integration-features 里没有这一项），只看那个变量会在
+   Ghostty 里永远判成深色。
+2. 改读 =ghostty +show-config= 也不行：它会把 =theme = light:X,dark:Y= 解成具体颜色，
+   但**不跟随系统外观** —— 实测系统浅色和深色两种情况下它都输出 light 那档的
+   #eff1f5（它只是个普通 CLI 进程，没那个上下文）。
+
+所以分两种配置处理（=flywind-theme--parse-ghostty=）：theme 同时给了 light: 和 dark:
+两档（官方文档：两档都给才会自动切）时，终端自己跟 macOS，**看 macOS 外观**；只给
+一档或手写死 background 时配置是静的，+show-config 解析出的背景色就是终端真正的背景，
+拿它算亮度（阈值 =flywind-theme-light-luminance=，默认 128）。一次探测靠一条 shell 同时
+拿配置段和 AppleInterfaceStyle，用标记分隔，不串两个子进程。
+
+不是白捡的：Emacs 31 有个会随系统主题变化自动更新的变量 toolkit-theme，但它自己的文档
+明写只在 PGTK / Android / MS-Windows 构建里赋值 —— macOS 的 ns 构建不在其列，ns-win.el
+里也找不到任何读 NSAppearance 的代码。所以 Mac 上只能自己查 defaults（约 10ms）。
+
+要点：
+
+- 启动期稳态零子进程。先读本格缓存（.local/cache/theme-appearance，纯文件读）立刻载
+  主题，不查系统、也不会「先深后浅」闪一下。本格第一次（无缓存）同步查一次：
+  defaults 约 10ms、Ghostty 那条约 20ms，实测冷启动 0.188s vs 常态 0.171s。不想花
+  这一次就设 =flywind-theme-probe-at-startup= 为 nil。
+- 启动后马上再异步核对一次（=flywind-theme--start-watching= 里踢一脚）：缓存可能是
+  上一个外观下留下的，等满一个轮询周期才纠正的话，中间这段主题就是错的。异步
+  = 不占启动时间。之后才是焦点回来 / 每 flywind-theme-check-interval 秒。
+- 终端也载真主题、也跟着实时变（以前 emacs -nw 是裸 face，且只看启动快照）：载主题
+  代价约 10ms，0.16s -> 0.17s。COLORFGBG 已经是准数的终端不装探测器，不白忙。
+- ns-appearance 故意不设：不设时 macOS 自己管窗口边框和标题栏、跟着系统走；显式设成
+  dark / light 反而把边框钉死，从此和系统脱钩。
+- 一个 Emacs 进程只能有一个主题方向（主题是全局的）。GUI 与终端混用同一进程时，
+  用 M-x flywind-theme-toggle 现场切。
+
+命令与变量：
+
+- M-x flywind-theme-toggle — 手动在浅 / 深之间切并钉住，同时写进本格缓存（下次启动沿用）
+- M-x flywind-theme-follow-system — 取消钉住 + 抹掉本格缓存，重新跟随
+- M-x flywind-theme-report — 打印当前主题按什么定的：环境、各信号源、探测器命令、分格缓存
+  全表都列（GUI 分支在 Emacs.app 里跑一次即可确认）
+- flywind-theme-light / flywind-theme-dark — 换主题对（doom-themes 里 13 个 light 变体可选）
+- flywind-theme-force — 钉住：nil 跟随 / light / dark（只管当前进程；跳重启靠缓存）
+- flywind-theme-check-interval — 轮询秒数，0 = 不轮询，只在启动和焦点回来时查
+- flywind-theme-probe-at-startup — 无缓存时允许启动同步探一次（默认 t）
+- flywind-theme-light-luminance — 终端背景亮度阈值，>= 它算浅色
 
 * 常用命令
 
-- ~M-x flywind-install-missing-packages~ — 刷新索引并安装 ~flywind-packages~ 里缺的包
-- ~M-x prepare-user-lisp~ — 需要重新抓取 autoload cookie 时手动执行
+- ~M-x flywind-check-config~ — 体检，结果写进 ~*flywind-check-config*~：字节编译
+  有无 Error/Warning、ELPA 缺哪些包、三个语法库是否就位、四个 language server
+  是否可执行。带 ~C-u~ 前缀全量重编，把每个文件的警告重现一遍。
+- ~M-x flywind-install-treesit-grammars~ — 装 json/yaml/toml 语法库
+- ~M-x flywind-install-missing-packages~ — 刷索引并装 ~flywind-packages~ 里缺的包
 - ~M-x flywind-sync-package-selected-packages~ — 把 ~flywind-packages~ 同步进
-  ~package-selected-packages~（存到 ~.local/etc/custom.el~）；只有同步过之后
-  ~M-x package-autoremove~ / package-menu 才会把清单外的包当依赖正确判断
+  ~package-selected-packages~（存 ~.local/etc/custom.el~）。同步过之后
+  ~package-autoremove~ / package-menu 才会把清单外的包正确当依赖判断。
+- ~M-x flywind-byte-compile-config~ — 只编自有 ~.el~（early-init / init / user-lisp），
+  不扫第三方目录。~flywind-check-config~ 已经含这一步。
+- ~M-x flywind-config-refresh-mode-mappings~ — 语法库装好后重建 major mode 映射，
+  不必重启。
 - ~M-x flywind/consult-search-dwim~（~C-s~）— 文件里 ~consult-line~，其它 buffer 里
   ~consult-ripgrep~
 
-* 按键迁移（Ivy → Vertico/Consult）
+启动期不联网：不 ~package-refresh-contents~、不用 ~:ensure~。
 
-| 键        | 原（ivy/counsel）        | 现（vertico/consult）     |
-|-----------+--------------------------+---------------------------|
-| ~C-s~     | counsel-grep-or-swiper   | flywind/consult-search-dwim |
-| ~C-S-s~   | counsel-grep             | consult-ripgrep           |
-| ~C-x C-r~ | counsel-recentf          | consult-recent-file       |
-| ~C-x b~   | counsel-switch-buffer    | consult-buffer            |
-| ~C-x C-o~ | counsel-imenu            | consult-imenu             |
-| ~M-y~     | counsel-yank-pop         | consult-yank-pop          |
-| ~M-r~     | ivy-repeat               | vertico-repeat            |
-| ~C-x g~   | magit（ivy 版）          | magit                     |
-| ~s~（dired）| ivy 文件搜索           | dired 内置 ~s~（新建 dir） |
+* 启动预算与测量
 
-* lsp-bridge
-
-lsp-bridge 的 python 端要求 Python >=3.13,<3.14，而系统 python3 是 3.14，
-所以用独立 venv（不受 shell 里激活的 venv 影响）：
+预算：暖缓存 ~after-init-time - before-init-time < 0.6s~。本机实测 ~0.160s~（跑四次，
+首趟 ~0.204s~）。~emacs -nw~ 要有 tty，非交互 shell 里用 ~script~ 造一个：
 
 #+begin_example
-cd ~/.emacs.d
-uv venv --python 3.13 .local/etc/lsp-bridge-venv
-uv pip install --python .local/etc/lsp-bridge-venv/bin/python \
-  epc orjson packaging paramiko rapidfuzz sexpdata six watchdog
+cat > /tmp/st.el <<'EOF'
+(add-hook 'emacs-startup-hook
+          (lambda ()
+            (append-to-file (format "STARTUP %.3f\n"
+                            (float-time (time-subtract after-init-time before-init-time)))
+                            nil "/tmp/startup.txt")
+            (kill-emacs)))
+EOF
+rm -f /tmp/startup.txt
+for i in 1 2 3; do script -q /dev/null emacs -nw -l /tmp/st.el >/dev/null 2>&1; done
+cat /tmp/startup.txt
 #+end_example
 
-- ~lsp-bridge-python-command~ 固定为该 venv 的 python
-- 本机只有 pyright（无 basedpyright/ruff），故 ~lsp-bridge-python-lsp-server~ = ~pyright~
-- lsp buffer 内关闭 company（上游 README 要求 lsp-bridge 不与 company 并存）
-- submodule 的 ~.elc~ 落在子模块工作区，已通过各子模块的 ~.git/info/exclude~ 排除
+~--eval~ /~-l~ 里的 ~after-init-time~ 还是 ~nil~（它在命令行参数处理完之后才赋值），
+所以要挂 ~emacs-startup-hook~。
 
-* 窗口布局
+启动期不起子进程：~exec-path~ 用 ~flywind-extra-exec-path~ 静态注入
+（/opt/homebrew/bin、/opt/homebrew/sbin、/usr/local/bin、~/.local/bin，不存在就跳过），
+取代 ~exec-path-from-shell~ 的 ~bash -l~ 子进程。从 Dock 启动的 Emacs 拿不到
+shell 的 PATH，这里也是它的补救点 —— 换了别的环境就改这个变量。
 
-用原生 ~display-buffer-alist~ 取代 popwin；并抵消 Emacs 31 的新默认值：
+* 按键
 
-- ~split-window-preferred-direction~ = ~'vertical~（31 默认 ~longest~）
-- ~split-width-threshold~ = ~160~
-- ~transpose-dedicated-windows~ = ~nil~
-- 编译/帮助/搜索类 buffer 固定在下或右侧窗，其它保持默认分屏
+** Ivy → Vertico/Consult
 
-窗口操作全部走内置 ~windmove~（已去掉 ace-window）：
+| 键          | 原（ivy/counsel）      | 现（vertico/consult）       |
+|-------------+------------------------+-----------------------------|
+| ~C-s~       | counsel-grep-or-swiper | flywind/consult-search-dwim |
+| ~C-S-s~     | counsel-grep           | consult-ripgrep             |
+| ~C-x C-r~   | counsel-recentf        | consult-recent-file         |
+| ~C-x b~     | counsel-switch-buffer  | consult-buffer              |
+| ~C-x C-o~   | counsel-imenu          | consult-imenu               |
+| ~M-y~       | counsel-yank-pop       | consult-yank-pop            |
+| ~M-r~       | ivy-repeat             | vertico-repeat              |
+| ~C-x g~     | magit（ivy 版）        | magit                       |
+| ~s~（dired）| ivy 文件搜索           | dired 内置 ~s~（新建 dir）   |
 
-| 键             | 作用                       |
-|----------------|----------------------------|
-| ~S-<方向>~     | 选那个方向的窗口     |
-| ~C-x o~ / ~C-x O~ | 循环下一个 / 上一个窗口（31 新增反向） |
-| ~C-x S-<方向>~ | 与那个窗口交换 buffer   |
-| ~C-x M-<方向>~ | 关掉那个方向的窗口       |
-| ~C-x 4 <方向>~ | 在那个窗口显示下一个命令的 buffer |
-| ~C-x 4 0~      | 下一个命令在当前窗口显示     |
-| ~C-x C-z~      | zoom-window：在当前窗口全屏/还原   |
+** 窗口
 
-失去的能力：按编号直接跳到第 N 个窗口（Emacs 31 无内置等价物，需要时
-可重新加 ace-window 或 winum）。
+用原生 ~display-buffer-alist~ 取代 popwin，并抵消 Emacs 31 的新默认值
+（~split-window-preferred-direction~ = ~'vertical~、~split-width-threshold~ = 160、
+~transpose-dedicated-windows~ = ~nil~）。窗口操作走内置 ~windmove~：
 
-* tree-sitter
+| 键               | 作用                                 |
+|------------------+--------------------------------------|
+| ~S-<方向>~       | 选那个方向的窗口                     |
+| ~C-x o~ / ~C-x O~ | 循环下一个 / 上一个窗口              |
+| ~C-x S-<方向>~   | 与那个窗口交换 buffer                |
+| ~C-x M-<方向>~   | 关掉那个方向的窗口                   |
+| ~C-x 4 <方向>~   | 在那个窗口显示下一个命令的 buffer    |
+| ~C-x C-z~        | zoom-window：当前窗口全屏 / 还原     |
 
-~treesit-auto~ + ~treesit-auto-install = 'melpa~：缺少的语法库（如 c）在第一次进入
-对应 ~*-ts-mode~ 时自动下载。已有语法库（bash/python/java/cpp）ABI 与 Emacs 31 兼容。
+失去的能力：按编号跳到第 N 个窗口（31 无内置等价物，需要时重新加 ace-window）。
+
+* ELPA 包清单（21 个）
+
+#+begin_example
+vertico orderless marginalia consult
+magit
+doom-themes doom-modeline
+easy-kill hungry-delete volatile-highlights
+rainbow-mode rainbow-delimiters
+diredfl dired-rainbow dired-rsync
+multi-term shell-pop xterm-color
+eyebrowse zoom-window diminish
+#+end_example
+
+权威清单在 ~init.el~ 的 ~flywind-packages~；~.local/etc/custom.el~ 里的
+~package-selected-packages~ 由 ~flywind-sync-package-selected-packages~ 同步，
+不要手改。
 
 * 已移除
 
-- Ivy / Counsel / Swiper / Ivy-rich / Smex / Counsel-projectile → Vertico 栈
-- projectile / counsel-projectile → 内置 project.el
-- popwin / window-numbering → display-buffer-alist + 内置 windmove
-- ace-window / avy → 内置 windmove（见上面的按键表）
-- ein / polymode / 其依赖（dash-at-point 因本机无 Dash.app 一并移除）
-- dired-quick-sort（MELPA orphan、依赖 hydra、且从未装成功）
-- indent-guide / highlight-parentheses（视觉噪音）
-- nox / awesome-tray / awesome-pair（submodule；Emacs 31 下不再使用）
-- Org 的 ELPA 源（Emacs 31 内置 Org 9.8）
+相对 IDE 化那版：
+
+- lsp-bridge（连同 nox / awesome-tray / awesome-pair submodule）→ 内置 eglot
+- company、company-posframe、posframe、yasnippet
+- neotree、nerd-icons
+- jupyter、python 模块、markdown-mode
+- treesit-auto → 三个手写 grammar 来源 + ~flywind-install-treesit-grammars~
+- exec-path-from-shell → ~flywind-extra-exec-path~ 静态注入
+- color-rg、aweshell（另两个 submodule）
+- 三个 git submodule 与 .gitmodules、module/ 目录：一个都不留
+- Ivy / Counsel / Swiper / projectile / popwin / ace-window / avy（更早一轮）
+- 自有模块 17 → 9：删 flywind-company / lsp / neotree / colorrg / python /
+  eshell / treesit；flywind-kill-ring 并入 basic，flywind-const 删掉（就地
+  ~eq system-type~）
+
+* 已知取舍
+
+- ini / ~.env~ / nginx / tmux / ssh_config / gitconfig 只高亮不校验：没有可靠的
+  LSP，宁可没有诊断也不要错得离谱的诊断。
+- TOML 有两个候选：~taplo~ 与 ~tombi~（Emacs 31 eglot 默认项）。装了 taplo 就用
+  taplo；本机现在用的是 tombi。改了 ~flywind-config-lsp-programs~ 要重启 Emacs
+  ——~eglot-server-programs~ 只在 eglot 加载时算一次。
+- 字节编译放在 ~flywind-check-config~ / ~flywind-byte-compile-config~ 里，不在启动期
+  递归扫第三方目录；但自有 ~.el~ 仍在启动期按时间戳编（~.elc~ 过期会静默盖住
+  源码改动，这个险不值得冒）。
+- Org 与终端相关模块保留：它们不在删除清单里，且 ~with-eval-after-load~ 让
+  启动成本为零。

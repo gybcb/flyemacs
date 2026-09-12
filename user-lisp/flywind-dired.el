@@ -2,6 +2,11 @@
 
 ;;; Commentary:
 ;;
+;; 启动成本：dired 是内置包，但 diredfl / dired-rainbow / dired-rsync 都不在启动期
+;; 加载 —— diredfl 按 buffer 挂在 dired-mode-hook 上，dired-rainbow 与 dired-rsync
+;; 等 dired 第一次被加载之后才动（前者只在宏展开里调 font-lock-add-keywords，
+;; 后者靠 autoload）。
+;;
 ;; Emacs 31 相关修正：
 ;;   * 去掉 `ls-lisp-use-insert-directory-program'（insert-directory-program 已是 gls，走外部 ls）
 ;;   * 移除 dired-quick-sort（MELPA 已 orphan、依赖 hydra、且从未安装成功），
@@ -13,17 +18,18 @@
 (eval-when-compile
   (require 'dired)
   (require 'dired-x)
-  (require 'diredfl)
-  (require 'dired-rainbow)
-  (require 'dired-rsync))
-
-(require 'flywind-const)
+  ;; `dired-rainbow-define' / `-define-chmod' 是宏：展开期要读 dired-hacks-utils 的
+  ;; 变量，而且展开结果里有 `(push ... dired-rainbow-ext-to-face)'。 编译期不
+  ;; require 就会把它们编成普通函数调用，运行时报 void-variable。
+  (require 'dired-rainbow))
 
 (use-package dired
   :ensure nil
-  :bind (:map dired-mode-map
-              ("C-c C-p" . wdired-change-to-wdired-mode)
-              ("S" . dired-sort-toggle-or-edit))
+  ;; dired 自身有 autoload（C-x d）；这里必须 :defer：use-package 只要碰到
+  ;; `:bind (:map dired-mode-map ...)' 就会为了拿到 keymap 直接 require dired，
+  ;; 启动期就多了 dired + dired-x + dired-rainbow 一串。 键位改到下面
+  ;; with-eval-after-load 里做。
+  :defer t
   :custom
   (dired-recursive-deletes 'always)
   (dired-recursive-copies 'always)
@@ -31,7 +37,7 @@
   (global-auto-revert-non-file-buffers t)
   (auto-revert-verbose nil)
   ;; macOS 的 ls 不支持 --dired；有 coreutils 的 gls 就用它
-  (dired-use-ls-dired (if (executable-find "gls") t (not sys/macp)))
+  (dired-use-ls-dired (if (executable-find "gls") t (not (eq system-type 'darwin))))
   (insert-directory-program (or (executable-find "gls")
                                 (executable-find "ls")
                                 "ls"))
@@ -41,14 +47,19 @@
   :config
   (put 'dired-find-alternate-file 'disabled nil))
 
-;; 彩色/分类着色
+(with-eval-after-load 'dired
+  (define-key dired-mode-map (kbd "C-c C-p") #'wdired-change-to-wdired-mode)
+  (define-key dired-mode-map (kbd "S") #'dired-sort-toggle-or-edit))
+
+;;;; 着色（都不在启动期加载）
 (use-package diredfl
-  :config
-  (diredfl-global-mode 1))
+  :hook (dired-mode . diredfl-mode))
 
 (use-package dired-rainbow
-  ;; 注：`dired-rainbow-define' 是宏，只能在包加载后调用（:init 早于 require，
-  ;; 会被当成普通函数求值而报 void-variable / void-function）。
+  ;; `dired-rainbow-define' 是宏，只能在包加载后调用（:init 早于 require，
+  ;; 会被当成普通函数求值而报 void-function）。 这里用 :after dired，让这十几组
+  ;; font-lock 关键词等到第一次用 dired 时才注册。
+  :after dired
   :config
   (dired-rainbow-define dotfiles "gray" "\\..*")
   (dired-rainbow-define web "#4e9a06"
@@ -76,16 +87,18 @@
   (dired-rainbow-define archive "saddle brown"
     ("zip" "tar" "gz" "tgz" "7z" "rar" "gzip" "xz" "001" "ace" "bz2" "lz"
      "lzma" "bzip2" "cab" "jar" "iso"))
-  (dired-rainbow-define log '(:inherit default :italic t) ".*\\.log")
+  ;; 不套 quote：宏直接把 face-props 呮给 defface，多一层 quote 会让 Emacs 报
+  ;; “Non-keyword in face attribute list: 'quote” 且样式失效。
+  (dired-rainbow-define log (:inherit default :italic t) ".*\\.log")
   (dired-rainbow-define-chmod executable-unix "green" "-[rw-]+x.*"))
 
-;; rsync
 (use-package dired-rsync
+  :defer t
   :bind (:map dired-mode-map
               ("C-c C-r" . dired-rsync)))
 
-;; 附加功能
-(use-package dired-aux :ensure nil)
+;;;; 附加功能
+(use-package dired-aux :ensure nil :defer t)
 
 (use-package dired-x
   :ensure nil

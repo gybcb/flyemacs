@@ -2,15 +2,18 @@
 
 ;;; Commentary:
 ;;
-;; 编码、备份/自动保存位置、常用编辑增强。
+;; 编码、备份/自动保存位置、kill-ring、常用编辑增强。
 ;; Emacs 31 相关修正：
 ;;   * `write-file-functions'（24.3 起废弃）-> 内置 `delete-trailing-whitespace-mode'（见 flywind-ui.el）
-;;   * 不再从 shell 导入 PYTHONPATH（当前 shell 有激活的 venv，会污染 lsp-bridge/jupyter 解释器）
+;;   * 不再用 exec-path-from-shell：它在启动期跑 `bash -l' 子进程。PATH 改由
+;;     early-init.el 的 `flywind-extra-exec-path' 静态注入。
+;;   * 不再从 shell 导入 PYTHONPATH（当前 shell 有激活的 venv，会污染解释器）
 ;;
 ;;; Code:
 
-(eval-when-compile (require 'hungry-delete)
-                 (require 'exec-path-from-shell))
+(eval-when-compile
+  (require 'hungry-delete)
+  (require 'easy-kill))
 
 ;;;; UTF-8 作为默认编码系统
 (when (fboundp 'set-charset-priority)
@@ -33,16 +36,14 @@
 (setq visible-bell nil
       ring-bell-function #'ignore)
 
-;;;; 环境变量（macOS GUI 启动时从登录 shell 取 PATH）
-(when (eq system-type 'darwin)
-  (use-package exec-path-from-shell
-    :custom
-    (exec-path-from-shell-check-startup-files nil)
-    (exec-path-from-shell-variables '("PATH" "MANPATH"))
-    (exec-path-from-shell-arguments '("-l"))
-    :config
-    (when (memq window-system '(mac ns x))
-      (exec-path-from-shell-initialize))))
+;;;; kill-ring
+;; 浏览交给 `consult-yank-pop'（见 flywind-completion.el 的 M-y 绑定）。
+(setq kill-ring-max 200
+      save-interprogram-paste-before-kill t)   ; 粘贴前先把剪贴板内容存入 kill-ring
+
+(use-package easy-kill
+  :bind (([remap kill-ring-save] . easy-kill)
+         ([remap mark-sexp] . easy-mark)))
 
 ;;;; 成对符号
 (use-package elec-pair

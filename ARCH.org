@@ -1,0 +1,258 @@
+#+TITLE: Emacs 31 配置架构图
+#+STARTUP: showall
+#+OPTIONS: num:nil toc:nil
+
+本文是三张静态架构图：图一启动引导层、图二模块装载层、图三外部依赖层。
+README.org 讲「怎么做、装什么」，本文讲「长什么样、谁依赖谁、坏在哪会怎样」。
+事实来源：early-init.el、init.el、user-lisp/*.el。
+
+* 图例
+
+| 标记       | 含义                             | 例子                                  |
+|------------+----------------------------------+---------------------------------------|
+| =（内置）=   | Emacs 31 自带，不需要装          | =eglot=、=windmove=、=conf-unix-mode=  |
+| =（ELPA）=   | package.el 装的包，共 21 个      | =vertico=、=magit=、=diredfl=          |
+| =（外部）=   | Emacs 进程外的程序或资源         | =taplo=、=shellcheck=、语法库 =.dylib= |
+
+线型：
+
+| 线型                    | 含义                                     |
+|-------------------------+------------------------------------------|
+| =>= / =v=               | 装载顺序（前一步完成后才走下一步）       |
+| =-require->=            | 编译期强依赖：缺了直接报错               |
+| =-.->=                  | 惰性依赖：use-package :defer / :after /  |
+|                         | autoload，第一次真正用到才加载           |
+| =-hook->=               | 挂在 hook 上，进 buffer 才生效           |
+
+* 图一：启动引导层
+
+目标：暖缓存 =after-init-time - before-init-time < 0.6s=（本机实测 0.160s）。
+下面每一格都标了对这个预算的贡献。
+
+#+begin_example
+进程启动
+  |
+  v
+early-init.el                                   ~0.00s 量级
+  |-- GC：gc-cons-threshold 放宽，after-init-hook 恢复原值
+  |-- 目录变量：flywind-{emacs,user-lisp,local,etc,cache,packages}-dir + 建目录
+  |-- exec-path：静态注入 flywind-extra-exec-path
+  |     (/opt/homebrew/bin, /opt/homebrew/sbin, /usr/local/bin, ~/.local/bin)
+  |     不存在的目录跳过。取代 exec-path-from-shell —— 那个要在启动期
+  |     跑 `bash -l` 子进程，是这条路径上唯一会被禁掉的东西。
+  |-- load-path：只加 user-lisp/
+  |     （关掉 Emacs 31 的 user-lisp-auto-scrape：它会在 init.el 之前
+  |       按目录顺序把模块刷一遍，那时 ELPA 还没激活）
+  '-- package.el：package-user-dir -> .local/packages/elpa
+        源用清华 https 镜像；package-gnupghome-dir 复用 elpa/gnupg
+  |
+  v
+init.el                                         ~0.15s，几乎全是 doom-themes
+  |-- package-initialize（读已装包清单，不联网）
+  |-- flywind-packages = 21 个包名（清单，不是安装动作）
+  |-- 自有 .el 按时间戳字节编译（early-init.el / init.el / user-lisp/*.el）
+  |     只碰自己的文件，绝不递归扫第三方目录。
+  |     为什么留在启动期：过期的 .elc 会静默盖住源码改动，
+  |     改了不生效还不报错，这个调试代价比省下的几十毫秒贵。
+  |-- require 九个模块（见图二）
+  |-- after-init-hook：恢复 GC；缺包则 warn（不自动装）
+  '-- 加载 custom-file（.local/etc/custom.el）
+
+启动期绝对不做的事：
+  package-refresh-contents / :ensure / 任何 subprocess / 递归 .el 扫描 /
+  package-autoremove
+#+end_example
+
+* 图二：模块装载层
+
+require 顺序即 init.el 里的顺序。只有前四个真的在启动期干活，
+其余三个（dired / git / shell）把成本推到第一次使用，org 是零成本 hook。
+
+#+begin_example
+basic -----> ui -----> config -----> completion --+--> dired --> window --> git --> shell --> org
+ 变量       主题       核心          vertico 栈     |    :defer   变量      自动    全懒     eval-
+ require    常驻       见下          常驻           |    加载     +autoload load     加载     after-load
+#+end_example
+
+| 模块        | 拉进来的东西                                          | 时机                       |
+|-------------+-------------------------------------------------------+----------------------------|
+| basic       | easy-kill / hungry-delete / volatile-highlights       | 启动期                     |
+| ui          | doom-themes（浅/深选一个载）/ doom-modeline / 行号  | 启动期（本配置最大单项）   |
+| config      | mode 映射 + 语法库探测 + eglot hook                   | 启动期只设 hook            |
+| completion  | vertico + orderless + marginalia + consult            | 启动期；consult 走 autoload|
+| dired       | dired / dired-aux / dired-x / diredfl / dired-rainbow / dired-rsync | 第一次 C-x d |
+| window      | windmove / winner / eyebrowse / zoom-window           | 变量即刻，zoom-window autoload |
+| git         | magit                                                 | 第一次 C-x g               |
+| shell       | shell / multi-term / shell-pop / xterm-color          | 第一次开 shell             |
+| org         | Org 外观与键位                                        | 加载 org 时（启动期为 0）  |
+
+** 注意：dired 那串键位不能写成 =:bind (:map dired-mode-map ...)=
+
+use-package 为了拿到 =dired-mode-map= 这个 keymap 会直接 require dired，
+于是 dired + dired-x + dired-rainbow 全进启动期。这里改成
+=with-eval-after-load 'dired= 里手写 =define-key=，dired 本身走 autoload。
+
+** ui 模块：主题按环境选浅色还是深色（一格一个环境）
+
+#+begin_example
+flywind-theme--desired
+  |
+  |-- flywind-theme-force 非 nil ------------------> 钉住的方向（toggle 写它，并落盘到本格）
+  |-- 免费信号：终端的 COLORFGBG（零成本；iTerm / kitty / alacritty 都导出）
+  |-- 本格缓存 .local/cache/theme-appearance 命中 --> 直接用（启动期零子进程、不闪）
+  |-- flywind-theme-probe-at-startup（本格第一次、无缓存）
+  |     '-- 同步跑一次探测器并写回缓存：defaults 约 10ms / ghostty 约 15ms
+  '-- 兜底 dark
+
+探测器（flywind-theme--probe-command）选哪个：
+  GUI                   -> defaults read -g AppleInterfaceStyle（key 不存在 = 浅色）
+  终端 + COLORFGBG 可用 -> 不探（已经是准数：timer 和焦点钩子都不装）
+  终端 + Ghostty        -> 一条 shell：+show-config 的 theme/background + 分隔符
+                           + AppleInterfaceStyle，再按下面两种配置分流
+  终端 + 其它           -> defaults（默认终端自己跟 macOS 换配色）
+
+缓存是按环境分格的 alist：(("gui" . dark) ("tty:ghostty" . light) ("tty:iTerm.app" . dark))
+—— toggle / follow-system / 探测器回写都只动当前那格，浅色 Ghostty 与深色 iTerm 不互顶。
+
+after-init 之后：先立即异步核对一次（缓存可能是上个外观下留的，等满一个轮询周期
+才纠正的话中间这段主题就是错的），之后才是焦点回来 + 每 flywind-theme-check-interval
+秒；与缓存不一致才 load 另一个主题并改写缓存。终端也要装：Ghostty 配了
+=theme = light:X,dark:Y= 会跟着系统实时换配色板，只看启动快照会停在错底色上。
+#+end_example
+
+Ghostty 要绕两层（=flywind-theme--parse-ghostty=）：
+
+1. 它不导出 COLORFGBG（shell-integration-features 里没有这一项），只看那个变量会永远
+   判成深色。
+2. 改读 =ghostty +show-config= 也不行（上一轮就是踩在这上面）：它会把 =theme = light:X,dark:Y=
+   解成具体颜色，但不跟随系统外观 —— 实测系统浅色 / 深色两种情况下它都输出 light
+   那档的 #eff1f5，因为 CLI 进程拿不到那个上下文。
+
+所以按配置结构分流：theme 同时给了 light: 和 dark: 两档（官方文档：两档都给才会自动
+切）-> 终端自己跟系统，看 macOS 外观；只给一档或手写 background -> 配置是静的，
++show-config 的 background 就是终端真背景，拿它算亮度。
+
+Emacs 31 的 toolkit-theme 本来就会随系统主题自动更新，但它只覆盖 PGTK / Android /
+MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppearance 的代码），
+所以 Mac 上这一步必须自己查外部程序。ns-appearance 不设：不设才由 macOS 自己管标题栏。
+
+** config 模块：这个配置的核心
+
+#+begin_example
+进 buffer
+  |
+  +-- auto-mode 映射 ------------> major mode
+  |     两类：
+  |       treesit 映射（json / yaml / toml）：语法库在 -> 用 *-ts-mode
+  |                                              不在   -> 用退路 mode（若无退路则不建映射）
+  |       builtin 映射（ini / .env / nginx / tmux / ssh_config / gitconfig / shellrc）
+  |
+  +-- 只有 json-ts-mode / js-json-mode / yaml-ts-mode / toml-ts-mode /
+      conf-toml-mode / sh-mode 挂了校验 hook
+        |
+        v
+      flywind-config--maybe-validate
+        |-- 查 flywind-config-lsp-command：可执行文件在不在
+        |     在   -> eglot-ensure（31 里真正的 connect 推迟到 post-command-hook）
+        |     不在 -> warn 一次（每种语言一次），本 buffer 不校验
+        '-- 其它 mode 完全不挂 hook：ini / .env / nginx / tmux / ssh_config /
+            gitconfig 打开时不产生任何子进程
+#+end_example
+
+* 图三：外部依赖层
+
+submodule 归零：.gitmodules 与 module/ 目录已删。外部依赖只剩 ELPA 包、
+language server、shellcheck 和语法库 =.dylib=。
+
+** ELPA 21 个包按归属
+
+| 归属     | 包                                                                    |
+|----------+-----------------------------------------------------------------------|
+| completion | vertico、orderless、marginalia、consult                                            |
+| git      | magit                                                                 |
+| ui       | doom-themes、doom-modeline、rainbow-mode、rainbow-delimiters          |
+| basic    | easy-kill、hungry-delete、volatile-highlights、diminish               |
+| dired    | diredfl、dired-rainbow、dired-rsync                                   |
+| window   | eyebrowse、zoom-window                                                |
+| shell    | multi-term、shell-pop、xterm-color                                    |
+
+权威清单在 init.el 的 =flywind-packages=；=package-selected-packages=
+（.local/etc/custom.el）由 =flywind-sync-package-selected-packages= 同步。
+没同步过就 =package-autoremove=，清单外的包会被当垃圾删掉。
+
+** 外部程序与降级路径
+
+| 外部程序                     | 谁在用              | 缺了会怎样                                       |
+|------------------------------+---------------------+--------------------------------------------------|
+| vscode-json-language-server  | json / jsonc 校验   | 该 buffer 不校验，warn 一次                      |
+| yaml-language-server         | yaml 校验           | 同上                                             |
+| taplo 优先，tombi 兜底       | toml 校验           | 同上（tombi 是 Emacs 31 eglot 的默认项，二选一） |
+| bash-language-server + shellcheck | sh-mode 校验     | 不校验；只有 bash-language-server 没有 shellcheck 时，有解析类诊断但没有 shellcheck 规则 |
+| tree-sitter CLI + cc         | 安装语法库          | =flywind-install-treesit-grammars= 失败，mode 落退路 |
+| git                          | magit               | magit 报错（靠 flywind-extra-exec-path 找到）    |
+| rg                           | consult-ripgrep     | C-S-s 不可用                                     |
+| gls（coreutils）             | dired               | 回退到 =ls=，=--group-directories-first= 失效     |
+
+** 语法库
+
+位置：tree-sitter/（=flywind-config-grammar-dir=）。本配置需要 json / yaml / toml
+三个，另有历史遗留的 bash / python / java / cpp。
+
+探测按 =treesit-load= 的找法来：文件名模板 =libtree-sitter-%s= / =lib%s=，
+后缀 =.dylib= / =.so= / =.dll=。所以「装了 json 语法库」的权威判断是能否
+=libtree-sitter-json.dylib= 命中，而不是目录里有没有文件。
+
+#+begin_example
+flywind-config-treesit-sources        treesit-language-source-alist
+  json  -> tree-sitter-json    master  src  -----add-to-list---->  （31 默认值里没有
+  yaml  -> tree-sitter-yaml    master  src                            这三个，必须自带）
+  toml  -> tree-sitter-toml    master  src
+        |
+        v  M-x flywind-install-treesit-grammars
+   treesit-install-language-grammar（联网 + git + cc）-> tree-sitter/libtree-sitter-<lang>.dylib
+#+end_example
+
+Emacs 31 第一次打开 =.json= 会弹「grammar for `json' is missing; install it?」，
+那是出现在无关 buffer 里的交互提问，还顺带联网。本配置在 =with-eval-after-load
+'treesit= 里把 =treesit-auto-install-grammar= 置 nil，改由上面的命令显式安装。
+
+** 一条容易踩空的路径：JSON 的 settings
+
+#+begin_example
+eglot 连上 -> push workspace/didChangeConfiguration(settings)
+   settings 里有 json.validate.enable=t  -> 「Property expected」正常报
+   settings 是空对象                     -> 0 条诊断，静默失效
+#+end_example
+
+空 settings 是 eglot 的默认行为，于是「配置看起来一切正常、就是不出诊断」。
+=flywind-config-lsp-settings= = '(:json (:validate (:enable t)))= 就是为了堵这个洞，
+形状是 eglot 要求的 SECTION-VALUE plist（section = =:json=）。
+yaml / toml / bash 三个 server 不依赖这一项。
+
+* 体检与故障定位
+
+=M-x flywind-check-config= 四节，对应上面四层依赖：
+
+| 节 | 检查                      | 失败含义                     |
+|----+---------------------------+------------------------------|
+| 1  | 自有 .el 能否字节编译     | 配置本身坏了（Error 优先修） |
+| 2  | 21 个 ELPA 包是否都在     | 装 =flywind-install-missing-packages= |
+| 3  | 三个语法库是否就位        | mode 会落退路                |
+| 4  | 四个 language server 可执行否 | 对应格式不做校验           |
+
+常见故障与定位：
+
+| 现象                          | 原因                            | 去处                                 |
+|-------------------------------+---------------------------------+--------------------------------------|
+| 改了 .el 不生效               | 过期 =.elc= 静默覆盖            | =flywind-check-config= 会重编        |
+| 坏的 JSON 一条诊断都没有      | settings 空 → 校验被关          | =flywind-config-lsp-settings=        |
+| 打开 .json 弹装 grammar 提问  | =treesit-auto-install-grammar= 被改回 | 见 config 模块 treesit 段       |
+| eglot 说找不到 server         | PATH 里没有 npm/uv 的 bin       | =flywind-extra-exec-path=            |
+| 打开 nginx.conf 起了子进程    | 校验 hook 挂错 mode             | =flywind-config-lsp-modes=           |
+| 终端主题与配色板不符          | 信号源缺失（Ghostty 无 COLORFGBG） | =M-x flywind-theme-report= 再 toggle   |
+| GUI 主题慢一拍才跟上系统      | 异步查证间隔内没焦点事件      | =flywind-theme-check-interval=      |
+| 启动变慢                      | 有东西在启动期 require 了重包   | =M-x profiler-report= 或 =--init-time= |
+
+诊断是否真的来自 server：=M-x eglot-events-buffer= 看 =publishDiagnostics= /
+=textDocument/diagnostic=。事件 buffer 保持 eglot 默认（别设成 =:size 0=，
+那会把唯一的排查手段关掉）。

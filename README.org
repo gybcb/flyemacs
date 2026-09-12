@@ -1,0 +1,102 @@
+#+TITLE: Emacs 31 配置说明
+#+STARTUP: showall
+
+* 目录结构
+
+#+begin_example
+early-init.el      启动最早期：GC 策略、目录变量、load-path、package.el 源
+init.el            package 初始化、按需字节编译、use-package 默认值、模块装载
+user-lisp/         自有配置模块（flywind-*.el）
+module/3rdparty/   git submodule：lsp-bridge / aweshell / color-rg
+.local/
+  packages/elpa/   package.el 的安装目录（package-user-dir）
+  etc/             非易失：custom.el、savehist、lsp-bridge-venv
+  cache/           易失：backup、auto-save
+elpa/gnupg/        ELPA 签名校验用的 GPG keyring（保留原位置）
+#+end_example
+
+* 启动流程
+
+1. ~early-init.el~
+   - 放宽 ~gc-cons-threshold~，启动完成后由 ~after-init-hook~ 恢复
+   - 定义 ~flywind-*-dir~ 目录变量并建目录
+   - 关闭 Emacs 31 的 ~user-lisp-auto-scrape~（它会在 init.el 之前把模块按目录顺序
+     加载一遍，此时 ELPA 尚未激活），只把 ~user-lisp/~ 加入 ~load-path~
+   - 只把真正用到的 3rdparty 目录加入 ~load-path~（避免 nox 的 2019 版 jsonrpc、
+     aweshell 的 2014 版 exec-path-from-shell 遮蔽内置/ELPA 版本）
+   - package.el：~package-user-dir~ 指向 ~.local/packages/elpa~，源用清华 https 镜像，
+     ~package-gnupghome-dir~ 复用 ~elpa/gnupg~
+2. ~init.el~
+   - ~package-initialize~
+   - ~flywind-prepare-lisp~：把过期的 ~user-lisp/~ 与所用 submodule 的 ~.el~ 编成
+     ~.elc~（~byte-recompile-file~ 自己比时间戳，没改动即零成本）
+   - 按依赖顺序 ~require~ 各模块
+   - ~after-init-hook~ 检查缺包并 ~warn~
+
+启动期不联网：不 ~package-refresh-contents~、不 ~:ensure~。
+
+* 常用命令
+
+- ~M-x flywind-install-missing-packages~ — 刷新索引并安装 ~flywind-packages~ 里缺的包
+- ~M-x prepare-user-lisp~ — 需要重新抓取 autoload cookie 时手动执行
+- ~M-x flywind-sync-package-selected-packages~ — 把 ~flywind-packages~ 同步进
+  ~package-selected-packages~（存到 ~.local/etc/custom.el~）；只有同步过之后
+  ~M-x package-autoremove~ / package-menu 才会把清单外的包当依赖正确判断
+- ~M-x flywind/consult-search-dwim~（~C-s~）— 文件里 ~consult-line~，其它 buffer 里
+  ~consult-ripgrep~
+
+* 按键迁移（Ivy → Vertico/Consult）
+
+| 键        | 原（ivy/counsel）        | 现（vertico/consult）     |
+|-----------+--------------------------+---------------------------|
+| ~C-s~     | counsel-grep-or-swiper   | flywind/consult-search-dwim |
+| ~C-S-s~   | counsel-grep             | consult-ripgrep           |
+| ~C-x C-r~ | counsel-recentf          | consult-recent-file       |
+| ~C-x b~   | counsel-switch-buffer    | consult-buffer            |
+| ~C-x C-o~ | counsel-imenu            | consult-imenu             |
+| ~M-y~     | counsel-yank-pop         | consult-yank-pop          |
+| ~M-r~     | ivy-repeat               | vertico-repeat            |
+| ~C-x g~   | magit（ivy 版）          | magit                     |
+| ~s~（dired）| ivy 文件搜索           | dired 内置 ~s~（新建 dir） |
+
+* lsp-bridge
+
+lsp-bridge 的 python 端要求 Python >=3.13,<3.14，而系统 python3 是 3.14，
+所以用独立 venv（不受 shell 里激活的 venv 影响）：
+
+#+begin_example
+cd ~/.emacs.d
+uv venv --python 3.13 .local/etc/lsp-bridge-venv
+uv pip install --python .local/etc/lsp-bridge-venv/bin/python \
+  epc orjson packaging paramiko rapidfuzz sexpdata six watchdog
+#+end_example
+
+- ~lsp-bridge-python-command~ 固定为该 venv 的 python
+- 本机只有 pyright（无 basedpyright/ruff），故 ~lsp-bridge-python-lsp-server~ = ~pyright~
+- lsp buffer 内关闭 company（上游 README 要求 lsp-bridge 不与 company 并存）
+- submodule 的 ~.elc~ 落在子模块工作区，已通过各子模块的 ~.git/info/exclude~ 排除
+
+* 窗口布局
+
+用原生 ~display-buffer-alist~ 取代 popwin；并抵消 Emacs 31 的新默认值：
+
+- ~split-window-preferred-direction~ = ~'vertical~（31 默认 ~longest~）
+- ~split-width-threshold~ = ~160~
+- ~transpose-dedicated-windows~ = ~nil~
+- 编译/帮助/搜索类 buffer 固定在下或右侧窗，其它保持默认分屏
+
+* tree-sitter
+
+~treesit-auto~ + ~treesit-auto-install = 'melpa~：缺少的语法库（如 c）在第一次进入
+对应 ~*-ts-mode~ 时自动下载。已有语法库（bash/python/java/cpp）ABI 与 Emacs 31 兼容。
+
+* 已移除
+
+- Ivy / Counsel / Swiper / Ivy-rich / Smex / Counsel-projectile → Vertico 栈
+- projectile / counsel-projectile → 内置 project.el
+- popwin / window-numbering → display-buffer-alist + ace-window
+- ein / polymode / 其依赖（dash-at-point 因本机无 Dash.app 一并移除）
+- dired-quick-sort（MELPA orphan、依赖 hydra、且从未装成功）
+- indent-guide / highlight-parentheses（视觉噪音）
+- nox / awesome-tray / awesome-pair（submodule；Emacs 31 下不再使用）
+- Org 的 ELPA 源（Emacs 31 内置 Org 9.8）

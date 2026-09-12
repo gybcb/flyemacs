@@ -1,16 +1,31 @@
-.local
-.cache
-elpa
-session*
-transient
-bookmarks
-cookies
-projectile-bookmarks.eld
-recentf
-*.
-.cache
-request
-transient
-.lsp-session-v1
-eshell
-nox
+# 包与编译产物
+/.local/
+/elpa/
+/eln-cache/
+/user-lisp/*.elc
+/user-lisp/.user-lisp-autoloads.el
+/init.elc
+/early-init.elc
+
+# 运行期状态
+/.cache/
+/session.*
+/transient/
+/bookmarks
+/cookies
+/recentf
+/.lsp-session-v1
+/eshell/
+/org-persist/
+/tramp
+/tree-sitter/
+/auto-save-list/
+/url/
+/snippets/
+/network-security.data
+/abbrev_defs
+/emo.json
+
+# 杂项
+.DS_Store
+*.~*~

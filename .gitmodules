@@ -1,18 +1,9 @@
-[submodule "module/3rdparty/awesome-pair"]
-	path = module/3rdparty/awesome-pair
-	url = https://github.com/manateelazycat/awesome-pair.git
-[submodule "module/3rdparty/awesome-tray"]
-	path = module/3rdparty/awesome-tray
-	url = https://github.com/manateelazycat/awesome-tray.git
 [submodule "module/3rdparty/color-rg"]
 	path = module/3rdparty/color-rg
 	url = https://github.com/manateelazycat/color-rg.git
 [submodule "module/3rdparty/aweshell"]
 	path = module/3rdparty/aweshell
 	url = https://github.com/manateelazycat/aweshell.git
-[submodule "module/3rdparty/nox"]
-	path = module/3rdparty/nox
-	url = https://github.com/manateelazycat/nox.git
 [submodule "module/3rdparty/lsp-bridge"]
 	path = module/3rdparty/lsp-bridge
 	url = https://github.com/manateelazycat/lsp-bridge.git

@@ -46,14 +46,19 @@ Use this for files that change often, like cache files.")
 			(setq file-name-handler-alist default-file-name-handler-alist)
 			(setq gc-cons-threshold 800000)))
 
+;; set proxy
+(setq url-proxy-services
+	  '(("no_proxy" . "^\\(localhost\\|10.*\\)")
+		("http" . "127.0.0.1:7890")
+		("https" . "127.0.0.1:7890")))
+
 ;; init melpa
 (require 'package)
 (setq package-user-dir (expand-file-name "elpa" flywind-packages-dir)
 	  package-enable-at-startup nil
 	  package-archives '(
-						 ("gnu"      .   "http://mirrors.tuna.tsinghua.edu.cn/elpa/gnu/")
-						 ("melpa"    .   "http://mirrors.tuna.tsinghua.edu.cn/elpa/melpa/")
-						 ("org"      .   "http://mirrors.tuna.tsinghua.edu.cn/elpa/org/")))
+						 ("gnu"      .   "http://elpa.gnu.org/packages/")
+						 ("melpa"    .   "http://melpa.org/packages/")))
 (package-initialize)
 
 (if (not (package-installed-p 'use-package))
@@ -106,8 +111,7 @@ Use this for files that change often, like cache files.")
  ;; If you edit it by hand, you could mess it up, so be careful.
  ;; Your init file should contain only one such instance.
  ;; If there is more than one, they won't work right.
- '(package-selected-packages
-   '(treesit-auto yaml-mode doom-modeline diminish yasnippet xterm-color eshell-z esh-help esh-autosuggest eshell-prompt-extras all-the-icons-dired diredfl dired-rsync dired-quick-sort dired-k company-posframe company-quickhelp doom-themes zoom-window window-numbering volatile-highlights use-package smex smart-hungry-delete rainbow-mode rainbow-delimiters popwin neotree magit lsp-ui lsp-python lsp-java ivy-rich ivy-hydra indent-guide hungry-delete highlight-parentheses eyebrowse exec-path-from-shell easy-kill dired-rainbow dash-at-point counsel-projectile company-lsp cnfonts browse-kill-ring ag ace-window)))
+ '(package-selected-packages nil))
 
 (custom-set-faces
  ;; custom-set-faces was added by Custom.

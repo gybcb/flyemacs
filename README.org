@@ -47,6 +47,9 @@ elpa/gnupg/        ELPA 签名校验用的 GPG keyring（保留原位置）
 | ~flywind-shell~     | shell / multi-term / shell-pop / xterm-color  | 全部懒加载              |
 | ~flywind-org~       | Org 外观与键位                                | ~with-eval-after-load~，零成本 |
 
+另外 ~user-lisp/flywind-tests.el~ 是主题那套的回归用例，~init.el~ 不加载它，
+要用时 ~M-x flywind-tests-run~（或走命令行 ~--batch~，见「常用命令」）。
+
 * 支持的格式与校验
 
 | 格式                | major mode                            | 语法校验              | 依赖的外部程序                   |
@@ -151,6 +154,9 @@ Ghostty 是个坑，而且坑了两层：
 - ~M-x flywind-check-config~ — 体检，结果写进 ~*flywind-check-config*~：字节编译
   有无 Error/Warning、ELPA 缺哪些包、三个语法库是否就位、四个 language server
   是否可执行。带 ~C-u~ 前缀全量重编，把每个文件的警告重现一遍。
+- ~M-x flywind-tests-run~ — 主题跟随的回归用例（102 项断言），明细在
+  ~*flywind-tests*~。缓存绑到临时文件，不碰 ~.local/cache~ 里真那份，跑完把主题
+  还原成跑之前的方向。命令行跑法见下。
 - ~M-x flywind-install-treesit-grammars~ — 装 json/yaml/toml 语法库
 - ~M-x flywind-install-missing-packages~ — 刷索引并装 ~flywind-packages~ 里缺的包
 - ~M-x flywind-sync-package-selected-packages~ — 把 ~flywind-packages~ 同步进
@@ -162,6 +168,17 @@ Ghostty 是个坑，而且坑了两层：
   不必重启。
 - ~M-x flywind/consult-search-dwim~（~C-s~）— 文件里 ~consult-line~，其它 buffer 里
   ~consult-ripgrep~
+
+改完主题逻辑（~flywind-ui.el~ 里 ~flywind-theme-*~ 那一段）跑一遍回归最省事——
+那套坑全是「静默返回 nil」或「静默判成另一个方向」，不会报错：
+
+#+begin_src shell
+cd ~/.emacs.d
+emacs --batch -l early-init.el -l init.el -l user-lisp/flywind-tests.el \
+      --eval "(flywind-tests-run-batch)"
+#+end_src
+
+全过退出码 0；有失败退出码 1，并打印期望 / 实得。
 
 启动期不联网：不 ~package-refresh-contents~、不用 ~:ensure~。
 

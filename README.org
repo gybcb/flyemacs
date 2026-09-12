@@ -85,6 +85,21 @@ uv pip install --python .local/etc/lsp-bridge-venv/bin/python \
 - ~transpose-dedicated-windows~ = ~nil~
 - 编译/帮助/搜索类 buffer 固定在下或右侧窗，其它保持默认分屏
 
+窗口操作全部走内置 ~windmove~（已去掉 ace-window）：
+
+| 键             | 作用                       |
+|----------------|----------------------------|
+| ~S-<方向>~     | 选那个方向的窗口     |
+| ~C-x o~ / ~C-x O~ | 循环下一个 / 上一个窗口（31 新增反向） |
+| ~C-x S-<方向>~ | 与那个窗口交换 buffer   |
+| ~C-x M-<方向>~ | 关掉那个方向的窗口       |
+| ~C-x 4 <方向>~ | 在那个窗口显示下一个命令的 buffer |
+| ~C-x 4 0~      | 下一个命令在当前窗口显示     |
+| ~C-x C-z~      | zoom-window：在当前窗口全屏/还原   |
+
+失去的能力：按编号直接跳到第 N 个窗口（Emacs 31 无内置等价物，需要时
+可重新加 ace-window 或 winum）。
+
 * tree-sitter
 
 ~treesit-auto~ + ~treesit-auto-install = 'melpa~：缺少的语法库（如 c）在第一次进入
@@ -94,7 +109,8 @@ uv pip install --python .local/etc/lsp-bridge-venv/bin/python \
 
 - Ivy / Counsel / Swiper / Ivy-rich / Smex / Counsel-projectile → Vertico 栈
 - projectile / counsel-projectile → 内置 project.el
-- popwin / window-numbering → display-buffer-alist + ace-window
+- popwin / window-numbering → display-buffer-alist + 内置 windmove
+- ace-window / avy → 内置 windmove（见上面的按键表）
 - ein / polymode / 其依赖（dash-at-point 因本机无 Dash.app 一并移除）
 - dired-quick-sort（MELPA orphan、依赖 hydra、且从未装成功）
 - indent-guide / highlight-parentheses（视觉噪音）

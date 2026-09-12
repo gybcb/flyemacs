@@ -62,7 +62,7 @@ acm/ 等）靠运行时自行加路径，编译期不加就会报 Cannot open lo
     magit
     doom-themes doom-modeline
     company company-posframe yasnippet
-    neotree nerd-icons ace-window eyebrowse zoom-window
+    neotree nerd-icons eyebrowse zoom-window
     easy-kill
     hungry-delete
     volatile-highlights rainbow-mode rainbow-delimiters

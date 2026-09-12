@@ -12,7 +12,6 @@
 
 (eval-when-compile
   (require 'windmove)
-  (require 'ace-window)
   (require 'zoom-window)
   (require 'eyebrowse)
   ;; `transpose-dedicated-windows' 定义在 window-x.el，编译期不可见
@@ -86,27 +85,43 @@ REUSABLE 非 nil 时不设 `dedicated'、也不隐藏 mode-line（交互 buffer 
 
 ;; ---------------------------------------------------------------------------
 ;; 窗口导航 / 布局管理
+;;
+;; 不引入 ace-window： Emacs 31 内置的 windmove 已覆盖选窗 / 交换 / 关闭 /
+;; 指定方向展示，绑在同一个 `C-x' 前缀下，没编号直选（失去 ace-window 的
+;; “按数字跳到第 N 个窗口”，换来少两个包：ace-window + avy）。
+;;   S-<方向>       选窗口            （windmove）
+;;   C-x o / C-x O  循环下一个 / 上一个   （内置 other-window / other-window-backward）
+;;   C-x S-<方向>   与那边窗口交换 buffer
+;;   C-x M-<方向>   关闭那边窗口
+;;   C-x 4 <方向>   在那边窗口显示下一个命令的 buffer
 ;; ---------------------------------------------------------------------------
 (use-package windmove
   :ensure nil
   :demand t
-  :config
-  (windmove-default-keybindings))
+  :bind
+  (("<S-left>"  . windmove-left)
+   ("<S-right>" . windmove-right)
+   ("<S-up>"    . windmove-up)
+   ("<S-down>"  . windmove-down)
+   ("C-x <S-left>"  . windmove-swap-states-left)
+   ("C-x <S-right>" . windmove-swap-states-right)
+   ("C-x <S-up>"    . windmove-swap-states-up)
+   ("C-x <S-down>"  . windmove-swap-states-down)
+   ("C-x <M-left>"  . windmove-delete-left)
+   ("C-x <M-right>" . windmove-delete-right)
+   ("C-x <M-up>"    . windmove-delete-up)
+   ("C-x <M-down>"  . windmove-delete-down)
+   ("C-x 4 <left>"  . windmove-display-left)
+   ("C-x 4 <right>" . windmove-display-right)
+   ("C-x 4 <up>"    . windmove-display-up)
+   ("C-x 4 <down>"  . windmove-display-down)
+   ("C-x 4 0"       . windmove-display-same-window)))
 
 (use-package winner
   :ensure nil
   :demand t
   :config
   (winner-mode 1))
-
-;; 快速选窗（数字选择，取代原 window-numbering 的编号显示）
-(use-package ace-window
-  :bind ("C-x o" . ace-window)
-  :custom
-  (aw-keys '(?1 ?2 ?3 ?4 ?5 ?6 ?7 ?8 ?9))
-  (aw-disallow-alternate-window t)
-  :config
-  (ace-window-display-mode 1))
 
 ;; tmux 式窗口缩放
 (use-package zoom-window

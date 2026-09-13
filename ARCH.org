@@ -152,7 +152,7 @@ MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppea
 | Emacs 默认         | 0.296s |   208 us |                                     |
 | ~doom-modeline~    | 0.347s |   560 us | 已删；删前测的历史数据            |
 
-八个坑：
+九个坑：
 
 1. 原来 doom-modeline 压根没生效：~use-package~ 块在 ~(when (display-graphic-p)
    ...)~ 里，终端跑的时候整块被跳过。tty 里看到的一直是 Emacs 默认那条。
@@ -187,6 +187,15 @@ MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppea
    表在 tramp-sh.el 里，没加载时 ~ssh:~ 只剩方法名（实测）。(b) 测试要绑
    ~file-name-handler-alist~ 回启动前的原值：early-init.el 为启动速度把它置 nil、
    到 ~after-init-hook~ 才恢复，而 batch 路径不跑那个 hook，不绑则对远端路径恒 nil。
+9. ELPA 里只剩源码（没有 ~.elc~）时，代价不是噪音而是每次加载都现场解析 ~.el~：本机
+   ~elpa/~ 是整目录拷来的，190 个源码 / 0 个 ~.elc~。同口径对照（~script~ 造 tty +
+   ~after-init-time~）：101 个 ~.elc~ 改名移开 = ~0.224–0.232s~，放回 = ~0.172–0.178s~，
+   差 ~50ms~。Emacs 31 的 ~load~ 会顺带对没写 ~lexical-binding~ cookie 的源码告警
+   （~Missing `lexical-binding' cookie~，类别是 ~files~）—— 看到这条就等于在提示
+   「这个文件没编过」。~flywind-byte-compile-packages~ 负责补，判成败要看 ~.elc~
+   到没到手：~byte-compile-file~ 对 ~no-byte-compile: t~ 的文件返回那个符号、不报错。
+   不挂 hook、不在启动期扫 ~elpa/~（扫第三方目录是本配置明令禁止的启动动作），
+   所以只在手跑与装包后自动跑这两条路上。
 
 ** config 模块：这个配置的核心
 
@@ -289,6 +298,7 @@ yaml / toml / bash 三个 server 不依赖这一项。
 |----+---------------------------+------------------------------|
 | 1  | 自有 .el 能否字节编译     | 配置本身坏了（Error 优先修） |
 | 2  | 19 个 ELPA 包是否都在     | 装 =flywind-install-missing-packages= |
+| 2b | 已装包有没有 ~.elc~        | 跑 =flywind-byte-compile-packages=（每次加载现解析源码）|
 | 3  | 三个语法库是否就位        | mode 会落退路                |
 | 4  | 四个 language server 可执行否 | 对应格式不做校验           |
 

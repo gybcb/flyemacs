@@ -51,9 +51,72 @@ language server 与 tree-sitter 语法库也不列入：它们不走 package.el�
   "返回 `flywind-packages' 中尚未安装的包。"
   (seq-filter (lambda (pkg) (not (package-installed-p pkg))) flywind-packages))
 
+(defun flywind--package-dir (pkg)
+  "返回已安装包 PKG 的解包目录；没装则 nil。"
+  (let ((desc (car (cdr (assq pkg package-alist)))))
+    (and (package-desc-p desc) (package-desc-dir desc))))
+
+(defun flywind--el-needs-byte-compile (file)
+  "FILE（.el）值不值得编一次：没有 .elc、或 .elc 比源码旧，才算需要。"
+  (let ((elc (concat file "c")))
+    (not (and (file-exists-p elc)
+              (file-newer-than-file-p elc file)))))
+
+;;;###autoload
+(defun flywind-byte-compile-packages (&optional dirs)
+  "把已安装 ELPA 包的 .el 编成 .elc，返回 (编了 跳了 失败列表)。
+
+package.el 本来在装包时就编一次，但包是从别处拷进 elpa/ 的（本机正是这种：
+实测 190 个源码 / 0 个 .elc）、或者上次编译被打断时，ELPA 里会只剩源码。那样
+每次加载都在现场解析 .el，启动预算直接被吃掉：本机补齐 .elc 之前启动 0.25s，
+补齐之后 0.19s。Emacs 31 的 `load' 还会对没写 `lexical-binding' cookie 的源码
+告警（Missing `lexical-binding' cookie），那串噪音就是这么来的。
+
+只有两个调用点：`M-x flywind-byte-compile-packages' 手跑，和
+`flywind-install-missing-packages' 装完包后自动跑。启动路径不扫第三方目录 ——
+那是本配置的硬约束（见 `flywind-byte-compile-config'），所以这里不挂任何 hook。
+
+写了 `no-byte-compile: t' 的文件拿不到 .elc：`byte-compile-file' 对它们直接返回
+那个符号、不报错，所以判成败要看 .elc 到没到手。那是上游的选择（doom-themes 的
+87 个主题文件就是这样），算跳过的不算失败。`*-autoloads.el'、`*-pkg.el'、
+`.dir-locals.el' 也跳过：前两个由 package.el 生成。
+
+DIRS 给定就只编这些目录（装包那条用它，只编新装的）。"
+  (interactive nil)
+  (require 'bytecomp)
+  (let ((compiled 0) (skipped 0) (failed nil) (backup-inhibited t))
+    (dolist (root (or dirs (list package-user-dir)))
+      (when (file-directory-p root)
+        (dolist (file (directory-files-recursively root "\\.el\\'"))
+          (cond
+           ((string-match-p "\\(-autoloads\\|-pkg\\|\\.dir-locals\\)\\.el\\'" file)
+            (cl-incf skipped))
+           ((not (flywind--el-needs-byte-compile file))
+            (cl-incf skipped))
+           (t
+            (condition-case err
+                (progn
+                  (byte-compile-file file)
+                  (if (file-exists-p (concat file "c"))
+                      (cl-incf compiled)
+                    (cl-incf skipped)))
+              (error
+               (push (format "%s :: %s" (file-name-nondirectory file)
+                             (or (nth 1 err) (car err)))
+                     failed))))))))
+    (message "ELPA 字节编译：%d 个 .elc，跳过 %d 个%s"
+             compiled skipped
+             (if failed (format "，失败 %d 个：%s"
+                                (length failed)
+                                (mapconcat #'identity failed "; "))
+               ""))
+    (list compiled skipped failed)))
+
 ;;;###autoload
 (defun flywind-install-missing-packages ()
-  "刷新索引并安装 `flywind-packages' 中缺失的包（需要网络）。"
+  "刷新索引并安装 `flywind-packages' 中缺失的包（需要网络）。
+装完顺手把新装的包编成 .elc：package.el 自己会在安装时编，但编译失败或被跳过时
+它不声张，elpa/ 里留一堆源码，代价是以后每次启动都在现场解析 .el。"
   (interactive)
   (let ((missing (flywind--missing-packages)))
     (if (null missing)
@@ -64,6 +127,9 @@ language server 与 tree-sitter 语法库也不列入：它们不走 package.el�
         (condition-case err
             (package-install pkg)
           (error (message "安装 %s 失败: %S" pkg err))))
+      (let ((dirs (delq nil (mapcar #'flywind--package-dir missing))))
+        (when dirs
+          (flywind-byte-compile-packages dirs)))
       (message "缺失包安装完成"))))
 
 ;;;###autoload

@@ -95,6 +95,32 @@ getenv 被整体换掉，其它名字转发给真的那个。"
          (out (and cmd (flywind-theme--run-probe-once))))
     (and cmd out (flywind-theme--parse-probe (car cmd) out))))
 
+(defun flywind-tests--declared-in-head-or-tail (file regexp)
+  "查 FILE 开头与结尾各 600 字节里有没有 REGEXP，命中返回 t。
+文件局部变量有两种写法：开头 -*- ... -*- 那串 cookie，或结尾 `Local Variables:'
+块。只看这两头，中间的正文不参与判断。"
+  (let ((size (nth 7 (file-attributes file))))
+    (when (natnump size)
+      (let (hit)
+        (dolist (range (if (> size 600)
+                           (list (cons 0 600) (cons (- size 600) size))
+                         (list (cons 0 size))))
+          (unless hit
+            (with-temp-buffer
+              (ignore-errors
+                (insert-file-contents-literally file nil (car range) (cdr range)))
+              (when (string-match-p regexp (buffer-string))
+                (setq hit t)))))
+        hit))))
+
+(defun flywind-tests--no-byte-compile-declared-p (file)
+  "源文件是否声明了 no-byte-compile: t（doom-themes 的主题文件都这么写）。"
+  (flywind-tests--declared-in-head-or-tail file "no-byte-compile:[ \\t ]*t"))
+
+(defun flywind-tests--lexical-cookie-p (file)
+  "源文件是否写了 lexical-binding 这个 cookie（没写才会触发那条告警）。"
+  (flywind-tests--declared-in-head-or-tail file "lexical-binding"))
+
 (defun flywind-tests-run ()
   "跑全套回归，返回 (通过数 . 失败数)；明细在 *flywind-tests*。"
   (interactive)
@@ -658,6 +684,60 @@ getenv 被整体换掉，其它名字转发给真的那个。"
                 (let ((s (flywind-modeline--remote nil)))
                   (and (string-match-p "~" s)
                        (string-match-p "scp:user@10\\.0\\.0\\.5" s) t))))))
+          ;; --- M：ELPA 里的 .elc（那条 Missing 'lexical-binding' cookie 告警）---
+          ;; 包只剩源码时，每次加载都现场解析 .el：实测本机补齐前启动 0.25s、
+          ;; 补齐后 0.19s。告警本身是 Emacs 31 的 load 对没写 cookie 的源码发的。
+          (flywind-tests--check "flywind-byte-compile-packages 存在" t
+            (fboundp 'flywind-byte-compile-packages))
+          (flywind-tests--check "该命令能 M-x" t
+            (and (interactive-form 'flywind-byte-compile-packages) t))
+          (flywind-tests--check "已装包的目录解析得出" t
+            (and (flywind--package-dir 'vertico)
+                 (file-directory-p (flywind--package-dir 'vertico))))
+          (flywind-tests--check "没装的包目录解析为 nil" nil
+            (flywind--package-dir 'no-such-package-xyz))
+          (flywind-tests--check "缺 .elc 时判定需要编译、编完不再需要" t
+            (let ((tmp (make-temp-file "fw-bc" nil ".el"))
+                  (before nil) (after nil))
+              (unwind-protect
+                  (progn
+                    (with-temp-file tmp (insert "(defvar flywind-demo-x nil)\n"))
+                    (setq before (flywind--el-needs-byte-compile tmp))
+                    (byte-compile-file tmp)
+                    (setq after (flywind--el-needs-byte-compile tmp)))
+                (delete-file tmp)
+                (let ((elc (concat tmp "c")))
+                  (when (file-exists-p elc) (delete-file elc))))
+              (and before (not after) t)))
+          ;; 这条是真回归：以后再把 elpa/ 整目录拷过来（.elc 掉光）会立刻红。
+          (flywind-tests--check "每个已装包的 .el 都有新鲜的 .elc（上游 no-byte-compile 除外）" nil
+            (let (bad)
+              (dolist (pkg flywind-packages)
+                (let ((dir (flywind--package-dir pkg)))
+                  (when dir
+                    (dolist (f (directory-files-recursively dir "\\.el\\'"))
+                      (unless (or (string-match-p "\\(-autoloads\\|-pkg\\|\\.dir-locals\\)\\.el\\'" f)
+                                  (flywind-tests--no-byte-compile-declared-p f))
+                        (unless (file-newer-than-file-p (concat f "c") f)
+                          (push (file-name-nondirectory f) bad)))))))
+              bad))
+          ;; 启动路径上会加载的那些：要么有 .elc，要么源码自己写了 cookie。
+          ;; 两条都不满足就是那条告警的成因。
+          (flywind-tests--check "启动加载的包都有 .elc 或 lexical-binding cookie" t
+            (and (seq-every-p
+                  (lambda (pkg)
+                    (let ((name (symbol-name pkg)))
+                      (let ((dir (flywind--package-dir pkg)))
+                        (if (null dir)
+                            t
+                          (let ((el (expand-file-name (concat name ".el") dir)))
+                            (or (not (file-exists-p el))
+                                (file-newer-than-file-p (concat el "c") el)
+                                (flywind-tests--lexical-cookie-p el)))))))
+                  '(vertico orderless marginalia consult easy-kill hungry-delete
+                            volatile-highlights rainbow-mode rainbow-delimiters
+                            eyebrowse zoom-window))
+                     t))
       (flywind-modeline-mode (if orig-mode 1 -1))))
             )
           (delete-file cache)

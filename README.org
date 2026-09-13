@@ -223,7 +223,7 @@ lighter 是实打实的 ~ VHl~ / ~ ws~ / ~ Rbow~（实测），不抹就在 mode
   是否可执行。带 ~C-u~ 前缀全量重编，把每个文件的警告重现一遍。
 - ~M-x flywind-modeline-report~ — 当前 mode line 用哪条实现、图标开没开、单次
   渲染多少微秒，外加一行样例与可调变量。
-- ~M-x flywind-tests-run~ — 回归用例（主题跟随 + mode line，175 项断言），明细在
+- ~M-x flywind-tests-run~ — 回归用例（主题跟随 + mode line + ELPA 编译，182 项断言），明细在
   ~*flywind-tests*~。缓存绑到临时文件，不碰 ~.local/cache~ 里真那份，跑完把主题
   还原成跑之前的方向。命令行跑法见下。
 - ~M-x flywind-install-treesit-grammars~ — 装 json/yaml/toml 语法库
@@ -233,6 +233,13 @@ lighter 是实打实的 ~ VHl~ / ~ ws~ / ~ Rbow~（实测），不抹就在 mode
   ~package-autoremove~ / package-menu 才会把清单外的包正确当依赖判断。
 - ~M-x flywind-byte-compile-config~ — 只编自有 ~.el~（early-init / init / user-lisp），
   不扫第三方目录。~flywind-check-config~ 已经含这一步。
+- ~M-x flywind-byte-compile-packages~ — 把已装 ELPA 包的 ~.el~ 编成 ~.elc~。什么时候
+  要跑：~elpa/~ 是整目录拷来的、或 ~Messages~ 里冒出 ~Missing `lexical-binding'
+  cookie~ 告警。本机就撞上过：190 个源码 / 0 个 ~.elc~，每次加载都在现场解析
+  ~.el~，补齐 ~.elc~ 之后启动墙钟从 ~0.25s~ 降到 ~0.19s~。幂等（~.elc~ 比 ~.el~ 新就
+  跳过，实测重复跑是「编 0 个 / 跳 250 个」），上游写了 ~no-byte-compile: t~
+  的文件（doom-themes 那 87 个主题文件）算跳过不算失败。~flywind-install-missing-packages~
+  装完包会自动对新装的包做一次。
 - ~M-x flywind-config-refresh-mode-mappings~ — 语法库装好后重建 major mode 映射，
   不必重启。
 - ~M-x flywind/consult-search-dwim~（~C-s~）— 文件里 ~consult-line~，其它 buffer 里
@@ -253,8 +260,8 @@ emacs --batch -l early-init.el -l init.el -l user-lisp/flywind-tests.el \
 
 * 启动预算与测量
 
-预算：暖缓存 ~after-init-time - before-init-time < 0.6s~。本机实测 ~0.160s~（跑四次，
-首趟 ~0.204s~）。~emacs -nw~ 要有 tty，非交互 shell 里用 ~script~ 造一个：
+预算：暖缓存 ~after-init-time - before-init-time < 0.6s~。本机实测 ~0.172s~–~0.178s~
+（暖缓存连跑三趟）。~emacs -nw~ 要有 tty，非交互 shell 里用 ~script~ 造一个：
 
 #+begin_example
 cat > /tmp/st.el <<'EOF'
@@ -272,6 +279,11 @@ cat /tmp/startup.txt
 
 ~--eval~ /~-l~ 里的 ~after-init-time~ 还是 ~nil~（它在命令行参数处理完之后才赋值），
 所以要挂 ~emacs-startup-hook~。
+
+这 ~50ms~ 是 ~elpa/~ 里 ~.elc~ 齐不齐的差价，同一套量法实测：把 101 个 ~.elc~ 临时改名
+移开 → ~0.224s~–~0.232s~；放回来 → ~0.172s~–~0.178s~。也就是说 ELPA 只剩源码时，每次
+加载都在现场解析 ~.el~，那是加载成本而不是噪音（噪音是顺带的那条 cookie 告警）。
+补齐走 ~M-x flywind-byte-compile-packages~。
 
 启动期不起子进程：~exec-path~ 用 ~flywind-extra-exec-path~ 静态注入
 （/opt/homebrew/bin、/opt/homebrew/sbin、/usr/local/bin、~/.local/bin，不存在就跳过），
@@ -342,12 +354,11 @@ eyebrowse zoom-window
 
 - doom-modeline、nerd-icons → ~flywind-modeline.el~ 自己实现（实测在 tty 下
   doom-modeline 从来没生效，且每次重绘比默认那条贵 2.7 倍）
-
 - diminish → ~flywind-hide-minor-mode-lighter~（flywind-basic.el，自己改
   ~minor-mode-alist~；三处 ~:diminish~ 改成 :config 里直接调）
 - lsp-bridge（连同 nox / awesome-tray / awesome-pair submodule）→ 内置 eglot
 - company、company-posframe、posframe、yasnippet
-- neotree、nerd-icons
+- neotree
 - jupyter、python 模块、markdown-mode
 - treesit-auto → 三个手写 grammar 来源 + ~flywind-install-treesit-grammars~
 - exec-path-from-shell → ~flywind-extra-exec-path~ 静态注入

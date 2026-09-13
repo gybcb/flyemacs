@@ -30,6 +30,8 @@
 (defvar flywind-tests--pass 0 "本轮通过数。")
 (defvar flywind-tests--fail 0 "本轮失败数。")
 
+(defvar flywind-tests--skip 0 "本轮因环境不适而跳过的断言数。")
+
 (defun flywind-tests--check (label want got)
   "断言 WANT 等于 GOT，不等就把差异打进结果缓冲。"
   (if (equal want got)
@@ -95,7 +97,8 @@ getenv 被整体换掉，其它名字转发给真的那个。"
          (cache (make-temp-file "flywind-theme-cache" nil ""))
          (inhibit-read-only t))
     (setq flywind-tests--pass 0
-          flywind-tests--fail 0)
+          flywind-tests--fail 0
+          flywind-tests--skip 0)
     (with-current-buffer out
       (erase-buffer)
       ;; 缓存指向临时文件：用例大量写缓存，绝不能污染 .local/cache 里真那份。
@@ -286,7 +289,8 @@ getenv 被整体换掉，其它名字转发给真的那个。"
   ;; 真环境跑（这台机器就在 Ghostty 里）：不能用 with-env 伪造 binary，
   ;; 那样探测不到配置段，只能验证「起没起进程」，验不了方向。
   (if (not (flywind-theme--probe-command))
-      (princ "SKIP 本环境没有可用探测器，跳过真进程查证两条\n")
+      (cl-incf flywind-tests--skip 3)
+      (princ "SKIP 本环境有免费信号（COLORFGBG）或没有可用探测器，跳过真进程查证 3 条\n")
     (let ((flywind-theme--probe nil) (flywind-theme--last-check 0.0))
       (dolist (p (process-list))
         (when (equal (process-name p) "flywind-theme") (delete-process p)))
@@ -394,8 +398,11 @@ getenv 被整体换掉，其它名字转发给真的那个。"
           (delete-file cache)
           ;; 用例里会 apply 主题，跑完还原成用户原本在看的方向。
           (when orig-kind (flywind-theme--apply orig-kind))))
-      (princ (format "\n==== %d PASS / %d FAIL ====\n"
-                     flywind-tests--pass flywind-tests--fail))
+      (princ (format "\n==== %d PASS / %d FAIL / %d SKIP ====\n"
+                     flywind-tests--pass flywind-tests--fail
+                     flywind-tests--skip))
+      (when (> flywind-tests--skip 0)
+        (princ "（SKIP 是环境不适而跳过的断言，不是失败；换到对应终端里跑就会执行）\n"))
       (special-mode)
       (goto-char (point-min)))
     (if (called-interactively-p 'interactive)
@@ -405,9 +412,10 @@ getenv 被整体换掉，其它名字转发给真的那个。"
 
 (defun flywind-tests-run-batch ()
   "批处理入口：打印明细，有失败就以退出码 1 结束。"
-  (let* ((res (flywind-tests-run))
-         (failed (cdr res)))
-    (message "flywind-tests: %d PASS / %d FAIL" (car res) failed)
+  (let* ((res (append (flywind-tests-run) (list flywind-tests--skip)))
+         (failed (cadr res)))
+    (message "flywind-tests: %d PASS / %d FAIL / %d SKIP" (car res) failed
+             (cdr (cdr res)))
     (kill-emacs (if (> failed 0) 1 0))))
 
 (provide 'flywind-tests)

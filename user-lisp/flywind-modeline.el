@@ -183,11 +183,18 @@ t      = 强制开。nil = 用 ASCII 标记（终端不是 Nerd Font 时用这�
 (defconst flywind-modeline-sep " │ ")
 
 (defun flywind-modeline--icons-p ()
-  "当前该不该出图标。tty 判不了终端字体，按 Nerd Font 假定。"
+  "当前该不该出图标。
+tty 判不了终端字体，按 Nerd Font 假定（Ghostty 用的是它自己的 font-family）。
+GUI 下探测：只有「确定没装」才退回 ASCII；探测不了（batch、没有显示后端）按开
+处理 —— macOS 会做字形回退，~/Library/Fonts 里就装着 Nerd Font，真缺字形是显式
+方块，一眼看得见，比整条 bar 静默退回 ASCII 好发现。"
+  ;; 写成 ('t t) 而不是裸 t：pcase 里裸 t 匹配「一切非 nil」，'auto 会被它吃掉。
   (pcase flywind-modeline-icons
     ('nil nil)
     ('t t)
-    (_ (if (display-graphic-p) (eq t (flywind-font-available-p)) t))))
+    (_ (or (not (display-graphic-p))
+           ;; memq 命中给的是尾串（(t unknown) 这种），谓词要的是 t/nil。
+           (and (memq (flywind-font-available-p) '(t unknown)) t)))))
 
 (defun flywind-modeline--glyph (name icons fallback)
   "取图标名 NAME 的字符串；ICONS 关时给 FALLBACK（ASCII）。"

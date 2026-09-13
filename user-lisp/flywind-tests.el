@@ -434,6 +434,27 @@ getenv 被整体换掉，其它名字转发给真的那个。"
           (flywind-tests--check "图标开着出单个码位" t
             (let ((g (flywind-modeline--glyph 'json t "?")))
               (and (stringp g) (= 1 (length g)) (= #xe60b (aref g 0)))))
+          (dolist (case '((gui-font-t . t) (gui-font-unknown . t) (gui-font-nil . nil)))
+            (flywind-tests--check
+             (format "GUI 图标判定 %S -> %S（预期即 cdr=%S）" (car case) (cdr case) (cdr case))
+             t
+             (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) t))
+                       ((symbol-function 'flywind-font-available-p)
+                        (lambda (&optional _f)
+                          (pcase (car case)
+                            ('gui-font-t t)
+                            ('gui-font-unknown 'unknown)
+                            (_ nil)))))
+               (let ((flywind-modeline-icons 'auto))
+                 ;; 直接把判定值交给 check 比，别在这儿 eq 成布尔：
+                 ;; want=nil 时 eq 出来的 t 反而对不上。
+                 (let ((got (flywind-modeline--icons-p)))
+                   (if (cdr case) (eq got t) (null got)))))))
+          (flywind-tests--check "tty 下不看字体探测，直接开" t
+            (cl-letf (((symbol-function 'display-graphic-p) (lambda (&rest _) nil))
+                      ((symbol-function 'flywind-font-available-p)
+                       (lambda (&optional _f) nil)))
+              (let ((flywind-modeline-icons 'auto)) (flywind-modeline--icons-p))))
           (flywind-tests--check "图标关掉退回 ASCII 标记" "?"
             (flywind-modeline--glyph 'json nil "?"))
           (with-temp-buffer

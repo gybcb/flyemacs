@@ -118,9 +118,11 @@
             ("\\.\\(?:mp3\\|flac\\)\\'" "open")
             ("\\.html?\\'" "open")
             ("\\.md\\'" "open"))))
+  ;; @eaDir 是群晖等设备生成的缩略图目录，跟 .DS_Store 一样该藏掉。
+  ;; 这条原本在 2022-02-28 那笔（另一台机器）里，合并时结转过来。
   (setq dired-omit-files
         (concat dired-omit-files
-                "\\|^.DS_Store$\\|^.projectile$\\|^\\.git$\\|^.svn$\\|^.vscode$\\|\\.js\\.meta$\\|\\.meta$\\|\\.elc$\\|^.emacs.*"))
+                "\\|^.DS_Store$\\|^.projectile$\\|^\\.git$\\|^.svn$\\|^.vscode$\\|\\.js\\.meta$\\|\\.meta$\\|\\.elc$\\|^.emacs.*\\|@eaDir$"))
   :bind (:map dired-mode-map
               ("C-h" . dired-omit-mode)))
 

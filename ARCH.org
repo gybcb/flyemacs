@@ -54,8 +54,13 @@ init.el                                         ~0.15s，几乎全是 doom-theme
   |     只碰自己的文件，绝不递归扫第三方目录。
   |     为什么留在启动期：过期的 .elc 会静默盖住源码改动，
   |     改了不生效还不报错，这个调试代价比省下的几十毫秒贵。
-  |-- require 九个模块（见图二）
-  |-- after-init-hook：恢复 GC；缺包则 warn（不自动装）
+  |-- 装载自有模块（清单在 flywind-modules，见图二）
+  |     缺任何一个 ELPA 包就整批不装，warn 里点名
+  |     flywind-install-missing-packages；单个模块报错只记账，不打断 init.el。
+  |     为什么：没包时模块只能以 .el 源码加载，文件头的
+  |     eval-when-compile (require ...) 会在装载期直接报
+  |     Eager macro-expansion failure，init.el 从此中断。
+  |-- after-init-hook：恢复 GC
   '-- 加载 custom-file（.local/etc/custom.el）
 
 启动期绝对不做的事：

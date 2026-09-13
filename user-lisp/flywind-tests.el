@@ -32,6 +32,9 @@
 ;; 绑定，被测函数读不到（实测分支解析因此静默返回 nil）。vc-mode 再 defvar 一次
 ;; 确保它是动态的。
 (defvar vc-mode)
+;; 本配置只 setq 它、不加载 display-fill-column-indicator.el，所以编译期得先
+;; defvar 成 special，否则冷编译要报 reference to free variable。
+(defvar global-display-fill-column-indicator-modes)
 
 (defvar flywind-tests--pass 0 "本轮通过数。")
 (defvar flywind-tests--fail 0 "本轮失败数。")
@@ -120,6 +123,64 @@ getenv 被整体换掉，其它名字转发给真的那个。"
 (defun flywind-tests--lexical-cookie-p (file)
   "源文件是否写了 lexical-binding 这个 cookie（没写才会触发那条告警）。"
   (flywind-tests--declared-in-head-or-tail file "lexical-binding"))
+
+(defun flywind-tests--fci-state ()
+  "返回一个 prog-mode buffer 里 fill-column 指示线的实际状态 (局部mode 画线变量)。
+本配置启动期不加载那个库，两个变量可能根本未定义，所以用 boundp 兜住。"
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (list (and (boundp 'display-fill-column-indicator-mode)
+               (symbol-value 'display-fill-column-indicator-mode))
+          (and (boundp 'display-fill-column-indicator)
+               (symbol-value 'display-fill-column-indicator)))))
+
+(defun flywind-tests--fci-hook-p (hook)
+  "HOOK 里有没有指向 fill-column 指示线的钩子（use-package :hook 放的是符号）。"
+  (seq-some (lambda (h)
+              (and (symbolp h)
+                   (string-match-p "fill-column-indicator" (symbol-name h))))
+            (default-value hook)))
+
+(defun flywind-tests--boot-subprocess (&optional empty-elpa)
+  "另起一个 batch Emacs 真跑一遍本配置，返回 (退出码 . 输出串)。
+EMPTY-ELPA 非空时把 `package-user-dir' 指向一个空的临时目录，那就等于干净克隆
+的第一次启动：`.local/' 在 .gitignore 里，那时候清单上的包一个都没有。
+
+为什么要另起进程：闸门是在 init.el 装载期生效的，在本进程里伪造
+`package-user-dir' 既测不到「init.el 到底跑到第几形」，又会把真启动的状态搞脏。"
+  (let* ((emacs-binary (if (and invocation-name invocation-directory)
+                           (expand-file-name invocation-name invocation-directory)
+                         (or (executable-find "emacs") "emacs")))
+         (repo (file-name-as-directory (expand-file-name flywind-emacs-dir)))
+         (empty (and empty-elpa (make-temp-file "flywind-empty-elpa" t)))
+         ;; 子进程退出时 recentf / savehist 会落盘，指到临时文件，不碰 .local 里真那两份。
+         (scratch (make-temp-file "flywind-boot-state" nil ""))
+         (out (generate-new-buffer " *flywind-boot*"))
+         (probe (concat "(progn (setq recentf-save-file " (prin1-to-string scratch)
+                        " savehist-file " (prin1-to-string scratch) ")"
+                        " (princ (format \"FLYWIND-BOOT %s\\n\""
+                        " (list (featurep 'flywind-basic)"
+                        " (and (fboundp 'flywind-install-missing-packages) t)))))"))
+         (args (append
+                (list "--batch" "--init-directory" repo
+                      "--load" (expand-file-name "early-init.el" repo))
+                ;; 顺序要紧：early-init.el 自己会设 package-user-dir，所以覆盖它
+                ;; 必须排在 --load early-init.el 之后、--load init.el 之前。
+                (and empty
+                     (list "--eval"
+                           (format "(setq package-user-dir %S)"
+                                   (file-name-as-directory empty))))
+                (list "--load" (expand-file-name "init.el" repo)
+                      "--eval" probe)))
+         (default-directory repo))
+    (unwind-protect
+        (cons (condition-case err
+                  (apply #'process-file emacs-binary nil out nil args)
+                ((debug error) (list 'boot-error err)))
+              (string-trim (with-current-buffer out (buffer-string))))
+      (kill-buffer out)
+      (when empty (delete-directory empty t))
+      (delete-file scratch))))
 
 (defun flywind-tests-run ()
   "跑全套回归，返回 (通过数 . 失败数)；明细在 *flywind-tests*。"
@@ -738,6 +799,76 @@ getenv 被整体换掉，其它名字转发给真的那个。"
                             volatile-highlights rainbow-mode rainbow-delimiters
                             eyebrowse zoom-window))
                      t))
+          ;; --- N：缺包时的启动闸门（干净克隆第一次启动）---
+          ;; 守这个复发过的坑：干净克隆没有 .local/（被 gitignore），模块是以 .el
+          ;; 源码被加载的，(eval-when-compile (require 'hungry-delete)) 在装载期被
+          ;; 现场宏展开 → init.el 在第一个 require 上就炸，后面九个模块连同全部
+          ;; keybind 一个都不生效；而「缺包只 warn」那条提示在文件末尾的
+          ;; after-init-hook 里，根本轮不到执行。
+          ;; 插在模型那层 let 里（而不是 progn 末尾）：那层之后就是 unwind-protect
+          ;; 的清理段，插不进去；子进程用例不受它影响。
+          (princ "\n== N. 缺包启动闸门 ==\n")
+          (flywind-tests--check "flywind-modules 就是那十个自有模块"
+            '(flywind-basic flywind-ui flywind-modeline flywind-config
+              flywind-completion flywind-dired flywind-window flywind-git
+              flywind-shell flywind-org)
+            (and (boundp 'flywind-modules) (symbol-value 'flywind-modules)))
+          (flywind-tests--check "清单里每个模块都有对应源文件" nil
+            (let (missing)
+              (dolist (m (and (boundp 'flywind-modules) flywind-modules))
+                (unless (file-exists-p
+                         (expand-file-name (concat (symbol-name m) ".el")
+                                           flywind-user-lisp-dir))
+                  (push m missing)))
+              missing))
+          ;; 单模块失败不连坐：坏的那个记账，后面的照常装载。
+          (flywind-tests--check "单模块加载失败不连坐其余模块" t
+            (let ((res (flywind-load-modules
+                        '(flywind-tests-no-such-module flywind-org))))
+              (and (= 1 (length res))
+                   (eq 'flywind-tests-no-such-module (car (car res)))
+                   (featurep 'flywind-org)
+                   t)))
+          (let ((fresh (flywind-tests--boot-subprocess t))
+                (normal (flywind-tests--boot-subprocess nil)))
+            (flywind-tests--check "空 ELPA 下 init.el 跑到底（退出码 0）" 0 (car fresh))
+            (flywind-tests--check "空 ELPA 下自有模块不装载、安装命令可用" t
+              (and (string-match-p "FLYWIND-BOOT (nil t)" (cdr fresh)) t))
+            (flywind-tests--check "空 ELPA 的提示点名 flywind-install-missing-packages" t
+              (and (string-match-p "flywind-install-missing-packages" (cdr fresh)) t))
+            (flywind-tests--check "包齐全时模块照常装载（退出码 0）" t
+              (and (eq 0 (car normal))
+                   (string-match-p "FLYWIND-BOOT (t t)" (cdr normal)) t))
+            (unless (and (eq 0 (car fresh)) (eq 0 (car normal)))
+              (princ (format "     空 ELPA 输出：%s\n     包齐全输出：%s\n"
+                             (cdr fresh) (cdr normal)))))
+          ;; --- O：fill-column 那条竖线不画 ---
+          ;; 它原先靠 use-package :hook 挂在 prog-mode-hook 上，而本配置打开的全是
+          ;; prog-mode 的配置文件，等于每个 buffer 右缘常驻一根线。
+          ;; 更要守的是全局那条：`global-display-fill-column-indicator-mode' 是个
+          ;; globalized minor mode，按 `global-display-fill-column-indicator-modes'
+          ;; （Emacs 默认 ((not special-mode) t)）逐 buffer 把局部 mode 打开，谁手滑
+          ;; 开一次就会被 customize 存下来、从此永久生效。
+          (princ "\n== O. fill-column 竖线 ==\n")
+          (flywind-tests--check "prog-mode-hook 里没有 fill-column 指示线钩子" nil
+            (flywind-tests--fci-hook-p 'prog-mode-hook))
+          (flywind-tests--check "启动期不加载 display-fill-column-indicator"
+            nil (featurep 'display-fill-column-indicator))
+          (flywind-tests--check "prog-mode buffer 里不画线" '(nil nil)
+            (flywind-tests--fci-state))
+          (flywind-tests--check "全局模式的 mode 过滤器钉成 nil" nil
+            global-display-fill-column-indicator-modes)
+          ;; 反向对照：过滤器换回 Emacs 默认值时，开 global 模式确实会画线。
+          ;; 少了这条对照，上面那条「过滤器 = nil」恒真也能算过（假通过）。
+          (flywind-tests--check "过滤器换回默认值时 global 模式会画线（对照）" t
+            (let ((global-display-fill-column-indicator-modes
+                   '((not special-mode) t)))
+              (global-display-fill-column-indicator-mode 1)
+              (unwind-protect
+                  (equal '(t t) (flywind-tests--fci-state))
+                (global-display-fill-column-indicator-mode -1))))
+          (flywind-tests--check "对照跑完本机仍不画线" '(nil nil)
+            (flywind-tests--fci-state))
       (flywind-modeline-mode (if orig-mode 1 -1))))
             )
           (delete-file cache)

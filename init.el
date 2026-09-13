@@ -194,19 +194,46 @@ package.el 的 `package-autoremove' / `package-menu' 依赖这个变量判断哪
 (flywind-byte-compile-config)
 
 ;;;; 模块装载
-;; 顺序只影响“谁先拿到全局状态”，模块之间没有互相 require。
-;; basic/ui/window/completion 是常驻核心；config 负责配置文件映射与校验 hook；
-;; dired/git/shell 里的包全部懒加载，require 本身几乎不花钱。
-(require 'flywind-basic)
-(require 'flywind-ui)
-(require 'flywind-modeline)
-(require 'flywind-config)
-(require 'flywind-completion)
-(require 'flywind-dired)
-(require 'flywind-window)
-(require 'flywind-git)
-(require 'flywind-shell)
-(require 'flywind-org)
+(defvar flywind-modules
+  '(flywind-basic flywind-ui flywind-modeline flywind-config flywind-completion
+    flywind-dired flywind-window flywind-git flywind-shell flywind-org)
+  "启动期装载的自有模块。
+顺序只影响“谁先拿到全局状态”，模块之间没有互相 require。
+basic/ui/window/completion 是常驻核心；config 负责配置文件映射与校验 hook；
+dired/git/shell 里的包全部懒加载，require 本身几乎不花钱。")
+
+(defun flywind-load-modules (&optional modules)
+  "装载 MODULES（默认 `flywind-modules'），逐个 `require'。
+一个模块出问题不连坐后面的：坏的那个记账，其余照装。返回失败列表，每项是
+(模块 . 错误消息)。
+为什么这里要兜住 error 而不是往上抛：init.el 一旦被中断，它后面的全部模块连同
+全部 keybind 都不生效，而现场只剩一句「An error occurred while loading
+init.el」，看不出是哪个模块的锅。"
+  (let ((failed nil))
+    (dolist (feature (or modules flywind-modules))
+      (condition-case err
+          (require feature)
+        ((debug error) (push (cons feature (error-message-string err)) failed))))
+    (nreverse failed)))
+
+;; 缺包闸门：清单里少一个包就整批不装，只留一条能照着做的提示。
+;; 为什么不能“照样装”：没包可 require 时模块是以 .el 源码被加载的，文件头那些
+;; (eval-when-compile (require 'hungry-delete)) 在装载期被现场宏展开就直接报错
+;; （Eager macro-expansion failure）。干净克隆第一次启动就是这样在第一个 require
+;; 上炸掉、init.el 从此中断的（.local/ 在 .gitignore 里，那时一个包都没有）。
+;; 逐包改成 (require 'x nil t) 只把致命错误往后挪到运行时那一句 require，代价是
+;; 改五个模块换一个半残配置，不如在这里挡住。
+;; 装完包重启，闸门自然放行；装包命令定义在本文件前面，闸门之后仍然可用。
+(let ((missing (flywind--missing-packages)))
+  (if missing
+      (warn "ELPA 缺 %d 个包，自有配置（模块与 keybind）未装载：%s\n执行 M-x flywind-install-missing-packages 安装后重启 Emacs"
+            (length missing) (mapconcat #'symbol-name missing " "))
+    (let ((failed (flywind-load-modules)))
+      (when failed
+        (warn "自有模块装载失败 %d 个：%s"
+              (length failed)
+              (mapconcat (lambda (f) (format "%s（%s）" (car f) (cdr f)))
+                         failed "、"))))))
 
 ;;;###autoload
 (defun flywind-check-config (&optional force)
@@ -309,12 +336,8 @@ package.el 的 `package-autoremove' / `package-menu' 依赖这个变量判断哪
 (when (file-readable-p custom-file)
   (load custom-file 'noerror 'nomessage))
 
-;;;; 缺包提示
-(add-hook 'after-init-hook
-          (lambda ()
-            (and-let* ((missing (flywind--missing-packages)))
-              (warn "以下包未安装，执行 M-x flywind-install-missing-packages 安装：%s"
-                    (mapconcat #'symbol-name missing " ")))))
+;; 缺包提示在上面的装载闸门里（那里顺便把模块整批挡住，一次讲完），
+;; 不再挂 after-init-hook 重复 warn 一遍。
 
 (provide 'init)
 ;;; init.el ends here

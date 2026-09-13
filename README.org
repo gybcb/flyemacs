@@ -33,7 +33,12 @@ tree-sitter/       语法库 .dylib（json/yaml/toml + 历史遗留的 bash/pyth
 elpa/gnupg/        ELPA 签名校验用的 GPG keyring（保留原位置）
 #+end_example
 
-* 模块（~init.el~ 按此顺序 ~require~）
+* 模块（~init.el~ 按此顺序装载）
+
+清单在 ~flywind-modules~，由 ~flywind-load-modules~ 逐个 ~require~：单个模块报错只
+记下名字、最后统一 warn，后面的照常装载（以前一个模块报错会把 ~init.el~ 整个打断，
+后面所有模块跟 keybind 全部不生效）。包没装齐时整批不装，见下文「装依赖」章
+「新机器第一次启动」。
 
 | 模块                | 职责                                          | 启动期成本              |
 |---------------------+-----------------------------------------------+-------------------------|
@@ -74,6 +79,35 @@ JSON 一项需要 ~flywind-config-lsp-settings~：eglot 连上后会 push 一个
 #+end_note
 
 * 装依赖
+
+** 新机器第一次启动（干净克隆）
+
+~.local/~ 整目录在 ~.gitignore~ 里，而 ELPA 包全装在里面（~package-user-dir~ =
+~.local/packages/elpa~），所以刚 ~git clone~ 下来的那份配置是一个包都没有的。
+这种状态下启动会被 ~init.el~ 的装载闸门挡住：
+
+#+begin_example
+Warning (emacs): ELPA 缺 19 个包，自有配置（模块与 keybind）未装载：vertico orderless ...
+执行 M-x flywind-install-missing-packages 安装后重启 Emacs
+#+end_example
+
+看到这条就照着做：
+
+#+begin_example
+M-x flywind-install-missing-packages     ; 刷索引并装清单里的 19 个包（要联网）
+重启 Emacs                               ; 闸门放行，模块与 keybind 恢复
+#+end_example
+
+为什么是整批挡住而不是照样启动：没包可 ~require~ 时模块是以 =.el= 源码被加载的，
+文件头 =eval-when-compile (require 'hungry-delete)= 那类 form 在装载期被现场宏展开
+就直接报 =Eager macro-expansion failure=，~init.el~ 在第一个 ~require~ 上中断，后面
+九个模块连同全部 keybind 一个都不生效，而现场只剩一句「An error occurred while
+loading init.el」。半套启动比不启动更难查，所以宁可留一条明确的提示。
+
+闸门只查 ~package-installed-p~，启动期仍然不联网、不自装包。语法库与 language
+server 不归闸门管（它们不走 package.el），装完包还要走本节剩下的两条。
+
+** language server 与语法库
 
 配置本身不含外部程序，缺了会怎样都写在 ~M-x flywind-check-config~ 里。
 
@@ -223,7 +257,9 @@ lighter 是实打实的 ~ VHl~ / ~ ws~ / ~ Rbow~（实测），不抹就在 mode
   是否可执行。带 ~C-u~ 前缀全量重编，把每个文件的警告重现一遍。
 - ~M-x flywind-modeline-report~ — 当前 mode line 用哪条实现、图标开没开、单次
   渲染多少微秒，外加一行样例与可调变量。
-- ~M-x flywind-tests-run~ — 回归用例（主题跟随 + mode line + ELPA 编译，182 项断言），明细在
+- ~M-x flywind-tests-run~ — 回归用例（主题跟随 + mode line + ELPA 编译 + 缺包闸门
+  + fill-column 竖线，共 198 项断言；实测本机 192~194 项直接过，其余因终端
+  环境 SKIP），明细在
   ~*flywind-tests*~。缓存绑到临时文件，不碰 ~.local/cache~ 里真那份，跑完把主题
   还原成跑之前的方向。命令行跑法见下。
 - ~M-x flywind-install-treesit-grammars~ — 装 json/yaml/toml 语法库
@@ -371,6 +407,25 @@ eyebrowse zoom-window
 
 * 已知取舍
 
+- ELPA 缺任何一个包就整批不装自有模块，不做「能装多少算多少」的半套启动：
+  缺包时模块只能以源码被加载，文件头的 =eval-when-compile (require ...)= 会在
+  装载期直接报错（实测 =Eager macro-expansion failure=），逐包加 =nil t= 也只是把
+  致命错误从编译期挪到运行时那一句 ~require~。代价：缺一个包时主题与 keybind
+  也一起没有，换来一条说清「缺什么、怎么装」的提示。
+- 不画 ~fill-column~ 那条竖线（=display-fill-column-indicator-mode=）：本配置打开的
+  就是 prog-mode 的配置文件，开了等于每个 buffer 正文右缘常驻一根线，而 80 列
+  在这里不是硬约束（JSON / nginx / tmux 的长行是常态）。 ~fill-column~ 本身留着：
+  ~whitespace-line-column~ 读它，但 ~whitespace-style~ 里没有 ~lines~ / ~lines-tail~，
+  所以它不画出任何东西。除了不挂 ~:hook~，还把
+  ~global-display-fill-column-indicator-modes~ 钉成 nil：全局那条
+  ~M-x global-display-fill-column-indicator-mode~ 是个 globalized minor mode，
+  Emacs 默认过滤器 =((not special-mode) t)= 会对除 special-mode 外的每个 buffer 都
+  开局部 mode，而且一开就被 customize 存下来、永久生效；实测（回归里那条反向
+  对照）换成默认过滤器就真会画线，钉成 nil 后就算开了也不画。
+  别拿 ~display-fill-column-indicator-character~ 当开关：它的 docstring 是「设非 nil
+  的 ~display-fill-column-indicator~ 时要保证 ~character~ 也非 nil」，而该库实现
+  自己会选字符（实测 bytecode 里有 =char-displayable-p 9474= 退回 =124= 那条
+  分支），所以 character = nil 是「自动选」而不是「不画」。
 - 抹 mode line 上的 lighter 要写成 ~("")~，不是裸空串 ~""~：mode line 的 lighter 位认
   「列表形式的 lighter」，裸空串在 tty 的渲染路径里判成无效 —— 实测把 cdr 设成 ~""~
   之后，每个被抹的 mode 都在 mode line 上打出一个 ~*invalid*~（当时四个）。batch 里

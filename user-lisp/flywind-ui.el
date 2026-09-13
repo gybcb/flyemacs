@@ -67,9 +67,34 @@
   (global-display-line-numbers-mode 1)
   (add-hook 'after-change-major-mode-hook #'flywind--disable-line-numbers))
 
-(use-package display-fill-column-indicator
-  :ensure nil
-  :hook (prog-mode . display-fill-column-indicator-mode))
+;;;; 不画 fill-column 那条竖线
+;; 本配置打开的就是 prog-mode 的配置文件，开了等于每个 buffer 正文右缘常驻一根
+;; 竖线；而 80 列在这里不是硬约束（JSON / nginx / tmux 的长行是常态）。
+;;
+;; Emacs 31.1 里这根线有三层开关（实测）：
+;;   1. buffer 局部的 `display-fill-column-indicator-mode'——默认 nil，不启用就不画。
+;;      原本就是靠 use-package 的 :hook 挂到 prog-mode-hook 上才出现的，现已去掉。
+;;   2. 全局那条 `global-display-fill-column-indicator-mode'：它是个 globalized
+;;      minor mode，按 `global-display-fill-column-indicator-modes'（默认
+;;      ((not special-mode) t) = 除 special-mode 外全部开）逐 buffer 把上面那个
+;;      局部 mode 打开。所以谁手滑 `M-x global-display-fill-column-indicator-mode'
+;;      一次、又被 customize 存进 custom.el，以后每个 buffer 都会有那根线。
+;;      下面把过滤器钉成 nil（no major modes），开了也不会到处画。 不用
+;;      (global-display-fill-column-indicator-mode -1)：那个 autoload 会在启动期
+;;      把 display-fill-column-indicator.el 载进来，为关掉一个东西而加载它不值。
+;;   3. 最底层的 buffer-local 变量 `display-fill-column-indicator'：默认 nil。
+;;      别拿 `display-fill-column-indicator-character' 当关闭开关：它的 docstring 是
+;;      “手动把 display-fill-column-indicator 设成非 nil 时，要保证 character 也
+;;      非 nil”，而该库实现自己会选字符（实测 bytecode 里有 char-displayable-p
+;;      9474 退回 124 那条分支）—— character = nil 的语义是“自动选”，不是“不画”。
+;;
+;; 相关默认值：`display-fill-column-indicator-column' = t（跟着 `fill-column' 走，
+;; 本配置 80）；`display-fill-column-indicator-warning' = nil（31.1 新增，开了之后
+;; 光标超出指示列时那根线换成 `display-fill-column-indicator-warning-face'）。
+;; `fill-column' 本身留着：`whitespace-line-column' 读它，而 `whitespace-style'
+;; 里没有 lines / lines-tail，它不画任何东西，也不与这条竖线重复。
+;; 想要回来：(add-hook 'prog-mode-hook #'display-fill-column-indicator-mode)
+(setq global-display-fill-column-indicator-modes nil)
 
 ;; tab
 (setq-default tab-width 4)

@@ -15,49 +15,46 @@
 ;;      在浅色与深色之间自动切换（见 `flywind-theme--apply'），写死的颜色在那边
 ;;      一定翻车。
 ;;   2. 图标用 JetBrainsMono Nerd Font 的码位，不依赖 nerd-icons / all-the-icons
-;;      包。码位不是猜的：名字取自 nerd-icons 的数据表，再用 `fc-query' 查过
-;;      JetBrainsMonoNerdFont-Regular.ttf 的 cmap，下面用到的 24 个全覆盖。
-;;      终端侧 Ghostty 的 font-family 也是这个 Nerd Font，所以 tty 与 GUI 同一套
-;;      字形。探测不到字体就退回 ASCII（见 `flywind-modeline-icons'）。
+;;      包。码位不是猜的：名字取自 nerd-icons 的数据表，再直读
+;;      JetBrainsMonoNerdFont-Regular.ttf 的 cmap 表逐个验过全覆盖（别用 fc-query
+;;      的 %{charset}，它只报 99 段、连确在用的码位都判成没有）。终端侧 Ghostty 的
+;;      font-family 也是这个 Nerd Font，所以 tty 与 GUI 同一套字形。探测不到字体就
+;;      退回 ASCII（见 `flywind-modeline-icons'）。
 ;;   3. `mode-line-format' 是对所有 buffer 都 buffer-local 的变量，必须
 ;;      `setq-default'。在 `define-minor-mode' 体里用 `setq' 只会改到当时那个
 ;;      buffer（实测：模式显示已开，新开的 json buffer 仍是系统默认那条）。
 ;;   4. 渲染路径上不做任何 I/O：只读 `buffer-name' / `buffer-modified-p' /
-;;      `buffer-read-only' / `vc-mode'。不调 `project-current'（那是 doom-modeline
-;;      每次重绘去走目录的原因），也不 stat 文件 —— 只读状态取 `buffer-read-only'
-;;      这个编辑器内部状态，不用 `file-writable-p'。
+;;      `buffer-read-only' / `vc-mode' / `default-directory'。不调
+;;      `project-current'（那是 doom-modeline 每次重绘去走目录的原因），也不 stat
+;;      文件 —— 只读状态取 `buffer-read-only' 这个编辑器内部状态，不用
+;;      `file-writable-p'。远端标记走 `file-remote-p'：它对本地路径是纯字符串判断，
+;;      实测本地 buffer 里调用之后 (featurep 'tramp) 仍是 nil，不会把 tramp 拉进
+;;      启动路径（路径本身是远端语法时才加载，而那种 buffer 里 tramp 早就在了）。
 ;;
-;; `flywind-modeline-implementation' 留了 doom 档：设成 doom 就是回到原来那条
-;; bar（包仍在清单里，按需 require），可以当场 A/B 两种长相。
+;; doom-modeline 与它的依赖 nerd-icons 都已从清单删除（卸载），本模块零外部依赖。
+;; 上面那串测量就是删它的依据；`M-x flywind-modeline-mode -1' 随时回到 Emacs 默认
+;; 那条，A/B 不必留第二个实现。
 ;;
 ;; 自己这条不再显示的东西：滚动条占位、`mode-line-client'（server 客户端标记）、
-;; `mode-line-remote'（远程文件标记）、`buffer-codepoint-for-data'。要哪个把对应
-;; 变量加回 `flywind-modeline--format' 即可。
+;; `buffer-codepoint-for-data'。要哪个把对应变量加回 `flywind-modeline--format'。
+;; 远程标记（`mode-line-remote'）本模块自己实现（`flywind-modeline--remote'）：
+;; stock 那个构造对本地文件渲染成一个常驻的 `-`（就是默认那条 `-UUU:**-` 末尾的
+;; dash），而它内部靠 `%[...%]' 做远端条件，`format-mode-line' 里连本地 buffer 都
+;; 渲染出条件内的文字，离线根本验不了 —— 所以不借用，直接读 `file-remote-p'。
 
 ;;; Code:
 
 (require 'cl-lib)
 
 (declare-function flywind-font-available-p "flywind-ui" (&optional family))
-(declare-function doom-modeline-mode "doom-modeline" (&optional arg))
+;; 本模块调用 flywind-basic.el 里的抹 lighter 函数：显式 require，别只靠 init.el
+;; 的顺序。启动期那次自动字节编译会提前载入本模块，那时函数还不存在。
+(require 'flywind-basic)
 ;; `flywind-modeline-mode' 由下面的 define-minor-mode 定义，:set 里提前读到它。
 (defvar flywind-modeline-mode)
 (defgroup flywind-modeline nil
   "轻量 mode line。"
   :group 'flywind)
-
-(defcustom flywind-modeline-implementation 'own
-  "用哪条 mode line。
-`own'  = 本模块这条，启动与渲染最便宜。
-`doom' = doom-modeline（包得装着；切换时按需 require）。"
-  :type '(choice (const :tag "本模块（快）" own)
-                 (const :tag "doom-modeline" doom))
-  :group 'flywind-modeline
-  :set (lambda (sym val)
-         (set-default sym val)
-         ;; 已经启用时才重建；否则 customize 会顺手把模式打开。
-         (when (and (fboundp 'flywind-modeline-mode) flywind-modeline-mode)
-           (flywind-modeline-mode 1))))
 
 (defcustom flywind-modeline-icons 'auto
   "是否用 Nerd Font 图标。
@@ -71,6 +68,12 @@ t      = 强制开。nil = 用 ASCII 标记（终端不是 Nerd Font 时用这�
 
 (defcustom flywind-modeline-show-vc t
   "是否显示版本控制分支。只从 `vc-mode' 抠，不起 git、不做 I/O。"
+  :type 'boolean
+  :group 'flywind-modeline)
+
+(defcustom flywind-modeline-show-remote t
+  "是否在 mode line 上标出远端来源（TRAMP / sudoedit）。
+标记取 `default-directory' 的 method:user@host；本地 buffer 完全不出现。"
   :type 'boolean
   :group 'flywind-modeline)
 
@@ -106,12 +109,20 @@ t      = 强制开。nil = 用 ASCII 标记（终端不是 Nerd Font 时用这�
   "版本控制分支。"
   :group 'faces)
 
+(defface flywind-modeline-remote
+  '((t :inherit (mode-line font-lock-string-face)))
+  "远端来源标记（TRAMP / sudoedit）。"
+  :group 'faces)
+
 (defface flywind-modeline-unsaved
   '((t :inherit (mode-line warning)))
   "未保存与只读状态。"
   :group 'faces)
 
-;;; 图标码位（名字来自 nerd-icons 数据表，字形存在性用 fc-query 对 TTF 验过）。
+;;; 图标码位（名字来自 nerd-icons 的数据表）。字形存在性是直读 TTF 的 cmap 表验的，
+;;; 不用 fc-query：它的 %{charset} 只报出 99 段、连这里确在用的 e0a0 / f023 都判成
+;;; 没有，拿来当覆盖探针会一路误判。remote 选 BMP 内的 nf-fa-globe（f0ac）而不是
+;;; Plane 15 的 nf-md-remote（f04b1）：后者要靠终端自己做字体回退，Ghostty 未必接。
 
 (defconst flywind-modeline-glyph
   '((json . #xe60b) (yaml . #xe8eb) (toml . #xe615) (config . #xe615)
@@ -119,7 +130,8 @@ t      = 强制开。nil = 用 ASCII 标记（终端不是 Nerd Font 时用这�
     (code . #xf121) (docker . #xe7b0) (wrench . #xf0ad) (python . #xe73c)
     (ruby . #xe739) (go . #xe724) (rust . #xe7a8) (css . #xe749)
     (javascript . #xe781) (file-code . #xf1c9) (html . #xe736) (file . #xf15b)
-    (folder . #xf07b) (branch . #xe0a0) (pencil . #xf040) (lock . #xf023))
+    (folder . #xf07b) (branch . #xe0a0) (pencil . #xf040) (lock . #xf023)
+    (remote . #xf0ac))
   "图标名 -> 码位。放常量表，映射表只写图标名，读起来知道是什么。")
 
 (defcustom flywind-modeline-name-icons
@@ -187,6 +199,12 @@ lighter 真的是空串，本来就不渲染，不用列在这里。"
 
 (defconst flywind-modeline-ascii-icon "?")
 (defconst flywind-modeline-ascii-branch "@")
+(defconst flywind-modeline-ascii-remote "~")
+(defconst flywind-modeline-remote-max-width 28
+  "远端标记里 method:user@host 的长度上限，超了截断加省略号。
+/sudo::/etc/ 这类写法会由 tramp 补全本机主机名（实测补出来是
+`root@shaogaoyangdeMac-mini-2.local' 这种四十来个字符的串），不设上限会把
+mode line 挤没。")
 (defconst flywind-modeline-sep " │ ")
 
 (defun flywind-modeline--icons-p ()
@@ -237,6 +255,8 @@ GUI 下探测：只有「确定没装」才退回 ASCII；探测不了（batch�
          (bad (or buffer-read-only (buffer-modified-p)))
          (icon-face (if bad 'flywind-modeline-unsaved 'flywind-modeline-icon)))
     (concat
+     ;; 远端标记放最前：TRAMP / sudo 文件要先看见“改的是哪台机器”，再看文件名。
+     (or (flywind-modeline--remote icons) "")
      (propertize (flywind-modeline--glyph icon-name icons flywind-modeline-ascii-icon)
                  'face icon-face)
      " "
@@ -249,6 +269,34 @@ GUI 下探测：只有「确定没装」才退回 ASCII；探测不了（batch�
        (propertize (concat " " (flywind-modeline--glyph 'pencil icons "*"))
                    'face 'flywind-modeline-unsaved))
       (t "")))))
+
+(defun flywind-modeline--remote (icons)
+  "远端（TRAMP / sudoedit）buffer 的标记；本地 buffer 返回 nil。
+标签是远端前缀去掉首尾冒号，形如 ssh:root@example.host，sudo 与 ssh 一眼分得开。
+三处细节：
+1. `file-remote-p' 对本地路径是纯字符串判断，实测调用之后 tramp 仍未被加载，
+   所以这条不进启动路径；只有路径本身是远端语法时才加载它。
+2. `/sudo::/etc/' 这种省略写法由 tramp 补全本机主机名，补出来的串带 text
+   property（实测带 `tramp-default'），先抹 property 再用。
+3. 补全出来的主机名实测四十来个字符，不设上限会把 mode line 挤没。"
+  (when (and flywind-modeline-show-remote
+             default-directory
+             (file-remote-p default-directory))
+    (let* ((remote (file-remote-p default-directory))
+           ;; 整段前缀形如 /ssh:root@example.host: —— 去掉首尾的 / 与 : 就是标签。
+           ;; 不取 method / user / host 三个分量：那两个要靠 tramp-methods 里的
+           ;; 方法表，而表在 tramp-sh.el 里，没加载时 ssh: 这种写法只能拿到
+           ;; method，标出来是「ssh:」这种没头没尾的东西（实测）。整段前缀不查表。
+           (label (substring-no-properties
+                   remote 1 (1- (length remote)))))
+      (when (> (length label) flywind-modeline-remote-max-width)
+        (setq label
+              (concat (substring label 0 flywind-modeline-remote-max-width) "…")))
+      (propertize
+       (concat (flywind-modeline--glyph 'remote icons
+                                        flywind-modeline-ascii-remote)
+               " " label flywind-modeline-sep)
+       'face 'flywind-modeline-remote))))
 
 (defun flywind-modeline--vc ()
   "从 `vc-mode' 抠分支名；它形如 \" Git-main\" / \" Git:main\" / \" SVN1.7:trunk\"。"
@@ -296,8 +344,8 @@ GUI 下探测：只有「确定没装」才退回 ASCII；探测不了（batch�
 
 (defvar flywind-modeline--stock-format (default-value 'mode-line-format)
   "Emacs 自带那条 `mode-line-format'，在加载时抓住。
-必须在加载时就存：等到开启时才存，一旦先关掉本模式（或者先开 doom 档再
-切回来），那时读到的已经是被改过的值了 —— 实测会把 mode line 设成 nil。")
+必须在加载时就存：等到开启时才存，一旦先关掉本模式，那时读到的已经是被本模块
+改过的值了 —— 实测会把 mode line 设成 nil。")
 
 ;;;###autoload
 (define-minor-mode flywind-modeline-mode
@@ -305,18 +353,10 @@ GUI 下探测：只有「确定没装」才退回 ASCII；探测不了（batch�
   :global t
   :lighter nil
   (if flywind-modeline-mode
-      (if (eq flywind-modeline-implementation 'doom)
-          (progn
-            ;; 先拿默认值打底，别让它在我们这条之上做替换。
-            (setq-default mode-line-format flywind-modeline--stock-format)
-            (require 'doom-modeline)
-            (doom-modeline-mode 1))
-        (when (bound-and-true-p doom-modeline-mode)
-          (doom-modeline-mode -1))
+      (progn
         (setq-default mode-line-format (flywind-modeline--format))
         (flywind-modeline--hide-noise-lighters))
-    (when (bound-and-true-p doom-modeline-mode)
-      (doom-modeline-mode -1))
+    ;; 回到 Emacs 默认那条。
     (setq-default mode-line-format flywind-modeline--stock-format))
   (force-mode-line-update t))
 
@@ -342,17 +382,18 @@ GUI 下探测：只有「确定没装」才退回 ASCII；探测不了（batch�
         (erase-buffer)
         (insert
          (format "实现：%s（图标：%s；`flywind-modeline-icons' = %S）\n"
-                 (cond ((eq flywind-modeline-implementation 'doom) "doom-modeline")
-                       (flywind-modeline-mode "本模块")
-                       (t "Emacs 默认"))
+                 (cond
+                  (flywind-modeline-mode "本模块")
+                  (t "Emacs 默认"))
                  (if (flywind-modeline--icons-p) "开" "关（ASCII）")
                  flywind-modeline-icons)
          (format "单次渲染：%.1f us（%d 次平均，样例是 6 行 JSON 的 config.json）\n" us n)
          (format "片段数：%d\n\n样例行（config.json）：\n%s\n\n可调：\n"
                  (if (listp fmt) (length fmt) -1)
                  (replace-regexp-in-string "[\n\t]+" " " sample))
-         "  flywind-modeline-implementation   own / doom（当场换实现）\n"
          "  flywind-modeline-icons            auto / t / nil\n"
+         "  flywind-modeline-show-remote      远端来源（TRAMP / sudo）标记\n"
+         "  flywind-modeline-show-vc          版本控制分支\n"
          "  flywind-modeline-show-coding      编码与行尾\n"
          "  flywind-modeline-show-position    行列与百分比\n"
          "  flywind-modeline-buffer-name-width  buffer 名截断宽度\n")

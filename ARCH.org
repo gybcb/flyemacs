@@ -11,7 +11,7 @@ README.org 讲「怎么做、装什么」，本文讲「长什么样、谁依赖
 | 标记       | 含义                             | 例子                                  |
 |------------+----------------------------------+---------------------------------------|
 | =（内置）=   | Emacs 31 自带，不需要装          | =eglot=、=windmove=、=conf-unix-mode=  |
-| =（ELPA）=   | package.el 装的包，共 20 个      | =vertico=、=magit=、=diredfl=          |
+| =（ELPA）=   | package.el 装的包，共 19 个      | =vertico=、=magit=、=diredfl=          |
 | =（外部）=   | Emacs 进程外的程序或资源         | =taplo=、=shellcheck=、语法库 =.dylib= |
 
 线型：
@@ -49,7 +49,7 @@ early-init.el                                   ~0.00s 量级
   v
 init.el                                         ~0.15s，几乎全是 doom-themes
   |-- package-initialize（读已装包清单，不联网）
-  |-- flywind-packages = 20 个包名（清单，不是安装动作）
+  |-- flywind-packages = 19 个包名（清单，不是安装动作）
   |-- 自有 .el 按时间戳字节编译（early-init.el / init.el / user-lisp/*.el）
   |     只碰自己的文件，绝不递归扫第三方目录。
   |     为什么留在启动期：过期的 .elc 会静默盖住源码改动，
@@ -77,7 +77,7 @@ basic -----> ui -----> config -----> completion --+--> dired --> window --> git 
 | 模块        | 拉进来的东西                                          | 时机                       |
 |-------------+-------------------------------------------------------+----------------------------|
 | basic       | easy-kill / hungry-delete / volatile-highlights       | 启动期                     |
-| ui          | doom-themes（浅/深选一个载）/ doom-modeline / 行号  | 启动期（本配置最大单项）   |
+| ui          | doom-themes（浅/深选一个载）/ 行号 / 噪音 lighter      | 启动期（本配置最大单项）   |
 | config      | mode 映射 + 语法库探测 + eglot hook                   | 启动期只设 hook            |
 | completion  | vertico + orderless + marginalia + consult            | 启动期；consult 走 autoload|
 | dired       | dired / dired-aux / dired-x / diredfl / dired-rainbow / dired-rsync | 第一次 C-x d |
@@ -142,6 +142,7 @@ MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppea
   flywind-modeline.el ─┬─ flywind-modeline--identity  ─┐ 图标 + buffer 名 + 未保存/只读
                         ├─ flywind-modeline--vc        ─┤ 从 vc-mode 那根串剔分支
                         ├─ flywind-modeline--coding    ─┤ UTF-8 LF / CRLF
+                        ├─ 内嵌 --remote           ─┐ file-remote-p，本地不出
                         └─ mode-line-modes / misc-info ─┘ major+minor / eglot+flycheck+时间
 #+end_example
 
@@ -149,9 +150,9 @@ MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppea
 |--------------------+--------+----------+-----------------------------------|
 | ~flywind-modeline~ | 0.279s |   140 us | 三个 :eval，其余走 C 侧 % 转义       |
 | Emacs 默认         | 0.296s |   208 us |                                     |
-| ~doom-modeline~    | 0.347s |   560 us | 每重绘一批 :eval（含 project-current）|
+| ~doom-modeline~    | 0.347s |   560 us | 已删；删前测的历史数据            |
 
-六个坑：
+八个坑：
 
 1. 原来 doom-modeline 压根没生效：~use-package~ 块在 ~(when (display-graphic-p)
    ...)~ 里，终端跑的时候整块被跳过。tty 里看到的一直是 Emacs 默认那条。
@@ -159,13 +160,16 @@ MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppea
    用 ~setq~ 只改到当时那个 buffer —— 模式显示已开，新开的 buffer 仍旧条。必须
    ~setq-default~。
 3. 默认那条要在加载时就抓住（~flywind-modeline--stock-format~ 的 defvar 初始值）：
-   等开启时才存，先关再开 / 先 doom 再切回来就拿到脏值，实测把 mode line 设成 nil。
+   等开启时才存，先关再开就拿到脏值，实测把 mode line 设成 nil。
 4. ~%z~ 给出的是终端编码（tty 下渲染成 ~UUU~），不是文件的。配置文件要盯的是
    LF/CRLF，所以自己读 ~buffer-file-coding-system~ + ~coding-system-eol-type~。
 5. elisp 正则没有 PCRE 的 ~\(?1:~ —— 不报错，只会静默拿不到分组。分支解析用普通
    ~\(...\)~ + ~match-string 1~。
-6. 图标码位来自 nerd-icons 数据表，再用 ~fc-query --format=%{charset}~ 对 TTF 验
-   过覆盖。回归里有条断言查「两张映射表的值都在码位表里」：写错图标名是静默失效。
+6. 图标码位不能拿 ~fc-query --format=%{charset}~ 当判据：它把码位折成区间、本机只
+   报 99 段，连 ~\U+E73C~（python）与它自己 ~fc-pattern~ 报的 ~\U+F084~ 都不在输出里，
+   照它判定会误杀。可靠做法是直读 TTF 的 ~cmap~ 表（本机 ~format=4 subtable=4~ 那段，
+   71560 个码位）。回归里有条断言查「两张映射表的值都在这张码位表里」：写错图标名
+   是静默失效。
    同理，抹 lighter 只能改已加载 mode 的条目：动作在 flywind-basic.el 的
    ~flywind-hide-minor-mode-lighter~（写成 ~("")~：裸空串在 tty 会渲染成 ~*invalid*~，
    而 batch 里看不出这个差别），晚加载的以 ~after-load-functions~ 补。
@@ -173,6 +177,16 @@ MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppea
    它们原先用 ~:diminish~ 关键字，而三者的 lighter 实测是可见文字 ~ VHl~ / ~ ws~ /
    ~ Rbow~（不是空串，不抹就常驻）。改成 :config 里直接调之后，diminish 包整个
    从清单删了 —— 它不是 Emacs 31 内建，留着就是启动路径上多一个包。
+7. ~load-path~ 顺序上 ui 在 modeline 之前，而抹 lighter 的函数在 flywind-basic.el：
+   光靠顺序不行。init.el 启动期那次自动字节编译会提前把 ui / modeline 载进去
+   （编译 flywind-tests.el 时 eval 到 ~(require 'flywind-ui)~），那时 basic 还没加载，
+   ~:config~ 里的调用就是 void-function；更糟的是本文件已经 provide，之后 init 的
+   require 是空转，lighter 静默没抹上。所以 ui 与 modeline 都 ~(require 'flywind-basic)~。
+8. 远端标记只在 ~default-directory~ 是远端前缀时出，判据用 ~file-remote-p~。两点要记：
+   (a) 标签取整段前缀（去首尾 ~:~），别取 method/user/host —— 后两个要 ~tramp-methods~，
+   表在 tramp-sh.el 里，没加载时 ~ssh:~ 只剩方法名（实测）。(b) 测试要绑
+   ~file-name-handler-alist~ 回启动前的原值：early-init.el 为启动速度把它置 nil、
+   到 ~after-init-hook~ 才恢复，而 batch 路径不跑那个 hook，不绑则对远端路径恒 nil。
 
 ** config 模块：这个配置的核心
 
@@ -202,13 +216,13 @@ MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppea
 submodule 归零：.gitmodules 与 module/ 目录已删。外部依赖只剩 ELPA 包、
 language server、shellcheck 和语法库 =.dylib=。
 
-** ELPA 20 个包按归属
+** ELPA 19 个包按归属
 
 | 归属     | 包                                                                    |
 |----------+-----------------------------------------------------------------------|
 | completion | vertico、orderless、marginalia、consult                                            |
 | git      | magit                                                                 |
-| ui       | doom-themes、doom-modeline、rainbow-mode、rainbow-delimiters          |
+| ui       | doom-themes、rainbow-mode、rainbow-delimiters                         |
 | basic    | easy-kill、hungry-delete                                              |
 | dired    | diredfl、dired-rainbow、dired-rsync                                   |
 | window   | eyebrowse、zoom-window                                                |
@@ -274,7 +288,7 @@ yaml / toml / bash 三个 server 不依赖这一项。
 | 节 | 检查                      | 失败含义                     |
 |----+---------------------------+------------------------------|
 | 1  | 自有 .el 能否字节编译     | 配置本身坏了（Error 优先修） |
-| 2  | 20 个 ELPA 包是否都在     | 装 =flywind-install-missing-packages= |
+| 2  | 19 个 ELPA 包是否都在     | 装 =flywind-install-missing-packages= |
 | 3  | 三个语法库是否就位        | mode 会落退路                |
 | 4  | 四个 language server 可执行否 | 对应格式不做校验           |
 

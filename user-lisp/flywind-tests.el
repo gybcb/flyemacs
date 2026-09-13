@@ -402,8 +402,7 @@ getenv 被整体换掉，其它名字转发给真的那个。"
                  (and (memq (flywind-theme--read-cache) '(light dark)) t)))))
   (princ "\n== L. mode line（flywind-modeline）==\n")
   (require 'flywind-modeline)
-  (let ((orig-mode flywind-modeline-mode)
-        (orig-impl flywind-modeline-implementation))
+  (let ((orig-mode flywind-modeline-mode))
     (unwind-protect
         (progn
           ;; --- 图标映射：整名正则优先，扩展名其次 ---
@@ -595,21 +594,70 @@ getenv 被整体换掉，其它名字转发给真的那个。"
           (flywind-tests--check "关掉后回到 Emacs 默认那条" t
             (equal (default-value 'mode-line-format)
                    flywind-modeline--stock-format))
-          ;; doom 档：包没装就算跳过，不算失败。
-          (if (not (require 'doom-modeline nil t))
-              (progn
-                (cl-incf flywind-tests--skip 2)
-                (princ "SKIP doom 档 2 条（本机没装 doom-modeline）\n"))
-            (setq flywind-modeline-implementation 'doom)
-            (flywind-modeline-mode 1)
-            (flywind-tests--check "doom 档也给出非空 mode line" t
-              (and (listp (default-value 'mode-line-format))
-                   (bound-and-true-p doom-modeline-mode)))
-            (flywind-modeline-mode -1)
-            (flywind-tests--check "从 doom 档切回来不残留" t
-              (equal (default-value 'mode-line-format)
-                     flywind-modeline--stock-format))))
-      (setq flywind-modeline-implementation orig-impl)
+          ;; doom-modeline 连同它的依赖 nerd-icons 都从清单删了，实现选项也没了。
+          ;; 想对比长相就关本模式回 Emacs 默认那条，不必留第二个实现。
+          (flywind-tests--check "清单里没有 doom-modeline" nil
+            (memq 'doom-modeline flywind-packages))
+          (flywind-tests--check "启动过程没加载 doom-modeline" t
+            (not (featurep 'doom-modeline)))
+          (flywind-tests--check "实现选项已从代码里移除" nil
+            (boundp 'flywind-modeline-implementation))
+          ;; --- 远端标记（TRAMP / sudoedit）---
+          ;; 全用远端语法的 default-directory：file-remote-p 是纯字符串解析，不连
+          ;; 服务器；真连一次 sudo 要在 tty 里喂密码，不值得。
+          ;;
+          ;; 必须把 file-name-handler-alist 绑回启动前的原值：early-init.el 为了启动
+          ;; 速度把它置 nil、到 after-init-hook 才恢复，而 batch 路径不会跑到那个 hook
+          ;; （实测：batch 里 handler 数=0、file-remote-p 对远端路径恒 nil，tramp 的
+          ;; autoload handler 也不在表里）。不绑回去这批用例会集体假通过或假失败。
+          ;;
+          ;; 断言直接查 flywind-modeline--remote 的返回值，不套 format-mode-line：
+          ;; batch 里没有窗口，mode line 构造一律渲染成空串（实测连 stock 整条、
+          ;; 连 %[...]% 都返回 ""），套上去会变成恒假。
+          (let ((flywind-modeline-show-remote t)
+                (file-name-handler-alist flywind--default-file-name-handler-alist))
+            (with-temp-buffer
+              (setq default-directory "/Users/shaogaoyang/.emacs.d/")
+              (flywind-tests--check "本地目录不出远端标记" nil
+                (flywind-modeline--remote t)))
+            (with-temp-buffer
+              (setq default-directory "/sudo:root@localhost:/etc/")
+              (let ((s (flywind-modeline--remote t)))
+                ;; string-match-p 返回匹配位置、不是 t，而 --check 拿 eq 比期望值，
+                ;; 所以每条都包一层 (and ... t)。
+                (flywind-tests--check "sudo 标记带 method:user@host" t
+                  (and (string-match-p "sudo:root@localhost" s) t))
+                (flywind-tests--check "sudo 标记不是空串" t
+                  (and (> (length s) 0) t))
+                (flywind-tests--check "sudo 标记带远端前缀分隔符" t
+                  (and (string-match-p flywind-modeline-sep s) t)))
+              (setq default-directory "/ssh:root@example.host:/etc/")
+              (let ((s (flywind-modeline--remote t)))
+                (flywind-tests--check "ssh 标记带主机名" t
+                  (and (string-match-p "ssh:root@example\\.host" s) t))))
+            ;; /sudo::/etc/ 省略了主机，tramp 补全本机名（实测四十多个字符，且带
+            ;; tramp-default 这个 text property），必须截断。
+            (with-temp-buffer
+              (setq default-directory "/sudo::/etc/")
+              (let ((s (flywind-modeline--remote t)))
+                (flywind-tests--check "tramp 补全的长主机名被截断" t
+                  ;; 截断后 `.local' 那段本来就没了，所以查省略号与长度，不查主机名。
+                  (and (string-match-p "…" s)
+                       (<= (length s) (+ flywind-modeline-remote-max-width 8))
+                       t))
+                (flywind-tests--check "长主机名仍保留 sudo:root 前缀" t
+                  (and (string-match-p "sudo:root@" s) t))))
+            (with-temp-buffer
+              (setq default-directory "/sudo:root@localhost:/etc/")
+              (let ((flywind-modeline-show-remote nil))
+                (flywind-tests--check "开关关掉就不出标记" nil
+                  (flywind-modeline--remote t))))
+            (with-temp-buffer
+              (setq default-directory "/scp:user@10.0.0.5:/srv/")
+              (flywind-tests--check "图标关时远端标记走 ASCII" t
+                (let ((s (flywind-modeline--remote nil)))
+                  (and (string-match-p "~" s)
+                       (string-match-p "scp:user@10\\.0\\.0\\.5" s) t))))))
       (flywind-modeline-mode (if orig-mode 1 -1))))
             )
           (delete-file cache)

@@ -31,7 +31,7 @@
 (defconst flywind-packages
   '(vertico orderless marginalia consult
     magit
-    doom-themes doom-modeline
+    doom-themes
     easy-kill
     hungry-delete
     volatile-highlights rainbow-mode rainbow-delimiters
@@ -43,7 +43,9 @@ language server 与 tree-sitter 语法库也不列入：它们不走 package.el�
 见 `flywind-check-config' 的报告与 README.org 的安装命令。
 
 不装 diminish：抹 mode line 上的噪音 lighter 由 flywind-basic.el 自己改
-`minor-mode-alist'（详见 `flywind-hide-minor-mode-lighter'）。")
+`minor-mode-alist'（详见 `flywind-hide-minor-mode-lighter'）。
+不装 doom-modeline（连带它的依赖 nerd-icons）：mode line 自己拼，实测启动省
+60ms、单次渲染只有它三分之一代价，见 flywind-modeline.el 的 Commentary。")
 
 (defun flywind--missing-packages ()
   "返回 `flywind-packages' 中尚未安装的包。"

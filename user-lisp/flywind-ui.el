@@ -13,6 +13,13 @@
 ;;
 ;;; Code:
 
+;; 本模块真的调用 flywind-basic.el 里的抹 lighter 函数，所以是 require 而不是
+;; declare-function：init.el 正常装载顺序下 basic 先加载，但启动期那次自动字节编译
+;; 会提前把本文件载进去（编译 tests.el 时 eval 到 (require 'flywind-ui)），那时若只
+;; 靠顺序，:config 里的调用就是 void-function —— 而且本文件已经 provide，之后 init
+;; 的 require 是空转，lighter 就没抹上。显式 require 把顺序钉死。
+(require 'flywind-basic)
+
 (eval-when-compile
   (require 'volatile-highlights)
   (require 'rainbow-delimiters)

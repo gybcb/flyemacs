@@ -39,7 +39,7 @@ elpa/gnupg/        ELPA 签名校验用的 GPG keyring（保留原位置）
 |---------------------+-----------------------------------------------+-------------------------|
 | ~flywind-basic~     | 基础行为、窗口/文件默认值、kill-ring 合并进来、抹 lighter 的公共函数 | 变量赋值                |
 | ~flywind-ui~        | 主题（自动浅深色）、行号、视觉细节            | doom-themes 加载        |
-| ~flywind-modeline~  | mode line：自己那条，doom-modeline 当可选档  | 一个 ~setq-default~      |
+| ~flywind-modeline~  | mode line：自己写的那条（含远端 / 分支 / 编码） | 一个 ~setq-default~      |
 | ~flywind-config~    | **核心**：mode 映射、语法库、eglot 校验          | 只设 hook，不加载 eglot |
 | ~flywind-completion~| vertico / consult / orderless / marginalia    | 常驻                    |
 | ~flywind-dired~     | dired 与着色                                  | ~:defer t~，开 dired 才算 |
@@ -150,13 +150,13 @@ Ghostty 是个坑，而且坑了两层：
 - flywind-theme-probe-at-startup — 无缓存时允许启动同步探一次（默认 t）
 - flywind-theme-light-luminance — 终端背景亮度阈值，>= 它算浅色
 
-* mode line：为什么不用 doom-modeline
+* mode line：自己写的那条
 
 你原来那条是 ~doom-modeline~。它其实一直没生效：~use-package~ 写在
 ~(when (display-graphic-p) ...)~ 里，终端跑的时候整块被跳过 —— 你看到的从来是
- Emacs 默认那条。要「快一点又好看」，就自己拼了一条 ~flywind-modeline~，
-~doom-modeline~ 留在清单里当可选档（~flywind-modeline-implementation~ 设成 ~doom~
-就切回去，当场生效）。
+ Emacs 默认那条。既然默认那条一直在跑，要「快一点又好看」就自己拼了一条
+ ~flywind-modeline~；doom-modeline 连同它的依赖 nerd-icons 已从清单删除，
+想对比长相就 ~M-x flywind-modeline-mode -1~ 回 Emacs 默认那条（当场生效）。
 
 本机（Apple Silicon + Ghostty tty）交替测三轮：
 
@@ -168,25 +168,40 @@ Ghostty 是个坑，而且坑了两层：
 
 自己这条比默认还便宜一点：~mode-line-format~ 里只三个 ~:eval~（身份、分支、编码），
 其余走 C 侧的 ~%l~ / ~%c~ / ~%P~ 转义与内置的 ~mode-line-modes~。~doom-modeline~
-每次重绘都要跑一批 ~:eval~（包括 ~project-current~ 那类目录探索），那是它慢的主因。
+每次重绘都要跑一批 ~:eval~（包括 ~project-current~ 那类目录探索），那是它慢的主因
+—— 那行是删它之前测的历史数据。
 
 长相（~│~ 是分隔符，图标用 Nerd Font 码位）：
 
 #+begin_example
-   init.el │ ⑂ master │ UTF-8 LF  1:0 All  (Elisp/l)
-  .gitignore │ ⑂ master │ UTF-8 LF  1:0 All  (Conf[Unix])
+     init.el │ ⑂ master │ UTF-8 LF  1:0 All  (Elisp/l)
+   .gitignore │ ⑂ master │ UTF-8 LF  1:0 All  (Conf[Unix])
+   sudo:root@localhost │ nginx.conf │ UTF-8 LF  1:0  3%  (Text/l)
 #+end_example
+
+最后那行是 ~sudoedit /etc/nginx/nginx.conf~ 或任意 TRAMP 文件：最前面是远端标记，
+内容就是远端前缀（~sudo:root@localhost~、~ssh:root@example.host~），sudo 与 ssh
+一眼分得开；过长按 ~flywind-modeline-remote-max-width~ 截断。本地 buffer 整段不出
+（~C-x C-f /Users/... ~ 这种开头没有 ~scheme:~ 的不算远端）。不想显示设
+~flywind-modeline-show-remote~ 为 nil。
 
 四条约束，改之前先看 ~flywind-modeline.el~ 顶部注释：
 
 - 颜色一律 ~:inherit~ 主题已经管好的 face。主题会在浅 / 深之间自动翻（见上一节），
   写死的颜色在那边一定翻车。
-- 图标码位不是猜的：名字取自 nerd-icons 的数据表，再用 ~fc-query~ 对
-  ~JetBrainsMonoNerdFont-Regular.ttf~ 的 cmap 逐个验过存在。Ghostty 的
-  ~font-family~ 也是同一个 Nerd Font，所以 tty 与 GUI 同一套字形。终端不是
+- 图标码位不是猜的：名字沿用 nerd-icons 的命名表（包本身不装），再直读
+  ~JetBrainsMonoNerdFont-Regular.ttf~ 的 cmap 表逐个验过存在（本机 71560 个码位）。
+  *别用 ~fc-query --format=%{charset}~ 当判据* —— 它把码位折叠成区间、本机只报 99 段，
+  连 ~\U+E73C~（python）和它自己 ~fc-pattern~ 报出的 ~\U+F084~ 都不在输出里，据此判定会
+  误杀。Ghostty 的 ~font-family~ 是同一个 Nerd Font，tty 与 GUI 同一套字形；终端不是
   Nerd Font 就把 ~flywind-modeline-icons~ 设 nil 退回 ASCII，否则是豆腐。
 - 渲染路径上零 I/O：分支从 ~vc-mode~ 那根串里剔，不起 git；只读状态取
-  ~buffer-read-only~，不用 ~file-writable-p~ 去 stat。
+  ~buffer-read-only~，不用 ~file-writable-p~ 去 stat；远端标记用 ~file-remote-p~，
+  它是纯字符串解析（本地路径连 tramp 都不加载，实测启动后 tramp 并未被加载）。
+  两点边界：远端标签取整段前缀，不取 method/user/host 分量（分量要查 ~tramp-methods~，
+  那张表在 tramp-sh.el 里，没加载时 ~ssh:~ 只能拿到方法名）；判据必须绑
+  ~file-name-handler-alist~ 测 —— 启动期它被 early-init.el 临时置 nil、测试的 batch
+  路径又不跑 ~after-init-hook~，不绑回去 ~file-remote-p~ 对远端路径恒 nil。
 - 编码段读 ~buffer-file-coding-system~，显示成 ~UTF-8 LF~。~%z~ 不行 —— 它给的是
   终端自己的编码（实测 tty 里渲染成 ~UUU~），而配置文件真正要盯的是 LF / CRLF。
 
@@ -208,7 +223,7 @@ lighter 是实打实的 ~ VHl~ / ~ ws~ / ~ Rbow~（实测），不抹就在 mode
   是否可执行。带 ~C-u~ 前缀全量重编，把每个文件的警告重现一遍。
 - ~M-x flywind-modeline-report~ — 当前 mode line 用哪条实现、图标开没开、单次
   渲染多少微秒，外加一行样例与可调变量。
-- ~M-x flywind-tests-run~ — 主题跟随的回归用例（102 项断言），明细在
+- ~M-x flywind-tests-run~ — 回归用例（主题跟随 + mode line，175 项断言），明细在
   ~*flywind-tests*~。缓存绑到临时文件，不碰 ~.local/cache~ 里真那份，跑完把主题
   还原成跑之前的方向。命令行跑法见下。
 - ~M-x flywind-install-treesit-grammars~ — 装 json/yaml/toml 语法库
@@ -296,12 +311,12 @@ shell 的 PATH，这里也是它的补救点 —— 换了别的环境就改这�
 
 失去的能力：按编号跳到第 N 个窗口（31 无内置等价物，需要时重新加 ace-window）。
 
-* ELPA 包清单（20 个）
+* ELPA 包清单（19 个）
 
 #+begin_example
 vertico orderless marginalia consult
 magit
-doom-themes doom-modeline
+doom-themes
 easy-kill hungry-delete volatile-highlights
 rainbow-mode rainbow-delimiters
 diredfl dired-rainbow dired-rsync
@@ -313,8 +328,9 @@ eyebrowse zoom-window
 ~package-selected-packages~ 由 ~flywind-sync-package-selected-packages~ 同步，
 不要手改。
 
-~doom-modeline~ 留在清单里是给人留着的那条退路：~flywind-modeline-implementation~
-设成 ~doom~ 才会 ~require~ 它（实测见「mode line」一节）。默认值下它不参与启动。
+清单里没有 ~doom-modeline~（连同它的依赖 ~nerd-icons~）：它在本机从来没生效过，
+而实测每次重绘比默认那条贵 2.7 倍。mode line 全部自己实现，图标用 Nerd Font 码位
+就够，不需要 ~nerd-icons~ 那套变量表与字体回退。想对比长相就关本模式回 Emacs 默认那条。
 
 清单里没有 ~diminish~：抹 mode line 上的噪音 lighter 由 ~flywind-basic.el~ 自己改
 ~minor-mode-alist~（~flywind-hide-minor-mode-lighter~）。它不是 Emacs 31 内建，留着
@@ -323,6 +339,9 @@ eyebrowse zoom-window
 * 已移除
 
 相对 IDE 化那版：
+
+- doom-modeline、nerd-icons → ~flywind-modeline.el~ 自己实现（实测在 tty 下
+  doom-modeline 从来没生效，且每次重绘比默认那条贵 2.7 倍）
 
 - diminish → ~flywind-hide-minor-mode-lighter~（flywind-basic.el，自己改
   ~minor-mode-alist~；三处 ~:diminish~ 改成 :config 里直接调）

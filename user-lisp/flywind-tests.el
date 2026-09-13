@@ -540,7 +540,9 @@ getenv 被整体换掉，其它名字转发给真的那个。"
           ;; 条目都不在就是本机没启用这个 mode，算跳过而不是空转通过
           ;; （assq 拿不到条目时断言会恒真，那是假通过）。
           (dolist (mode '(hungry-delete-mode which-key-mode eldoc-mode
-                           auto-revert-mode))
+                           auto-revert-mode
+                           volatile-highlights-mode whitespace-mode
+                           rainbow-mode))
             (let ((entries (delq nil (list (assq mode minor-mode-alist)))))
               (if (not entries)
                   (progn
@@ -557,6 +559,31 @@ getenv 被整体换掉，其它名字转发给真的那个。"
                                        (or (equal l '(""))
                                            (equal l '(ignore ""))))))
                               entries)))))
+          ;; flywind-hide-minor-mode-lighter 的两个分支用假条目直接打。真 mode 的
+          ;; 条目形态由 Emacs 定，“lighter 就是 mode 符号” 那一种本机碰不到。
+          ;; minor-mode-alist 是 special 变量，let 是动态绑定，被测函数看得见。
+          (let ((minor-mode-alist (list (list 'flywind-demo-mode " X")
+                                        (list 'flywind-demo2-mode
+                                              'flywind-demo2-mode " Y"))))
+            (flywind-hide-minor-mode-lighter 'flywind-demo-mode)
+            (flywind-hide-minor-mode-lighter 'flywind-demo2-mode)
+            (flywind-tests--check "普通条目抹成列表包空串" t
+              (equal (cdr (assq 'flywind-demo-mode minor-mode-alist)) '("")))
+            (flywind-tests--check "lighter 就是 mode 符号时保住形状（插 ignore）" t
+              (equal (cdr (assq 'flywind-demo2-mode minor-mode-alist))
+                     '(ignore ""))))
+          (flywind-tests--check "mode 还没加载时是空转，不报错" 'no-error
+            (condition-case err
+                (progn
+                  (flywind-hide-minor-mode-lighter 'flywind-no-such-mode)
+                  'no-error)
+              (error err)))
+          ;; diminish 不是 Emacs 31 内建：清单里不该有它，启动过程也不该加载它。
+          ;; 谁把 :diminish 关键字写回来，这两条会同时红。
+          (flywind-tests--check "flywind-packages 里没有 diminish" nil
+            (memq 'diminish flywind-packages))
+          (flywind-tests--check "启动过程没加载 diminish.el" t
+            (not (featurep 'diminish)))
           ;; 格式里裸符号出现的意思是「取这个变量的值」，名字打错就静默少一段。
           (flywind-tests--check "格式里引用的内置变量都存在" nil
             (let (miss)

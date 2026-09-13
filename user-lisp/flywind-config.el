@@ -26,6 +26,11 @@
 ;;
 ;;; Code:
 
+;; 只是编译期拿进来：下面都在 with-eval-after-load 里写 eglot 的变量，编译器看不到
+;; 定义就会报 reference / assignment to free variable。运行时不靠这一行。
+(eval-when-compile
+  (require 'eglot))
+
 (defgroup flywind-config nil
   "配置文件编辑与语法校验。"
   :group 'convenience

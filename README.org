@@ -37,7 +37,7 @@ elpa/gnupg/        ELPA 签名校验用的 GPG keyring（保留原位置）
 
 | 模块                | 职责                                          | 启动期成本              |
 |---------------------+-----------------------------------------------+-------------------------|
-| ~flywind-basic~     | 基础行为、窗口/文件默认值、kill-ring 合并进来 | 变量赋值                |
+| ~flywind-basic~     | 基础行为、窗口/文件默认值、kill-ring 合并进来、抹 lighter 的公共函数 | 变量赋值                |
 | ~flywind-ui~        | 主题（自动浅深色）、行号、视觉细节            | doom-themes 加载        |
 | ~flywind-modeline~  | mode line：自己那条，doom-modeline 当可选档  | 一个 ~setq-default~      |
 | ~flywind-config~    | **核心**：mode 映射、语法库、eglot 校验          | 只设 hook，不加载 eglot |
@@ -195,8 +195,11 @@ Ghostty 是个坑，而且坑了两层：
 占一格又不带信息，清单见 ~flywind-modeline-hidden-minor-modes~。抹的动作是本模块
 自己改 ~minor-mode-alist~（写成 ~("")~），没依赖 ~diminish~ 包：走它的 autoload 会让
 byte-comp 报 ~the function 'diminish' is not known to be defined~，运行时还要白付一次
-启动磁盘读。~flywind-ui.el~ 里那三处 ~:diminish~ 仍经 ~use-package-diminish~ 加载那个
-包，所以它启动时照样在 —— 本模块只是不再依赖它，没省启动时间。
+启动磁盘读。动作在 ~flywind-basic.el~ 的 ~flywind-hide-minor-mode-lighter~（public），
+因为 ~flywind-ui.el~ 也要用：volatile-highlights / whitespace / rainbow-mode 的
+lighter 是实打实的 ~ VHl~ / ~ ws~ / ~ Rbow~（实测），不抹就在 mode line 上常驻 ——
+它们原先靠 ~:diminish~ 关键字，现在改成在各自 :config 里调这个函数，~diminish~
+包已从清单删掉。
 
 * 常用命令
 
@@ -293,7 +296,7 @@ shell 的 PATH，这里也是它的补救点 —— 换了别的环境就改这�
 
 失去的能力：按编号跳到第 N 个窗口（31 无内置等价物，需要时重新加 ace-window）。
 
-* ELPA 包清单（21 个）
+* ELPA 包清单（20 个）
 
 #+begin_example
 vertico orderless marginalia consult
@@ -303,7 +306,7 @@ easy-kill hungry-delete volatile-highlights
 rainbow-mode rainbow-delimiters
 diredfl dired-rainbow dired-rsync
 multi-term shell-pop xterm-color
-eyebrowse zoom-window diminish
+eyebrowse zoom-window
 #+end_example
 
 权威清单在 ~init.el~ 的 ~flywind-packages~；~.local/etc/custom.el~ 里的
@@ -313,10 +316,16 @@ eyebrowse zoom-window diminish
 ~doom-modeline~ 留在清单里是给人留着的那条退路：~flywind-modeline-implementation~
 设成 ~doom~ 才会 ~require~ 它（实测见「mode line」一节）。默认值下它不参与启动。
 
+清单里没有 ~diminish~：抹 mode line 上的噪音 lighter 由 ~flywind-basic.el~ 自己改
+~minor-mode-alist~（~flywind-hide-minor-mode-lighter~）。它不是 Emacs 31 内建，留着
+就是在启动路径上多一个包，而它能做的事只有换掉 alist 里那个 cdr。
+
 * 已移除
 
 相对 IDE 化那版：
 
+- diminish → ~flywind-hide-minor-mode-lighter~（flywind-basic.el，自己改
+  ~minor-mode-alist~；三处 ~:diminish~ 改成 :config 里直接调）
 - lsp-bridge（连同 nox / awesome-tray / awesome-pair submodule）→ 内置 eglot
 - company、company-posframe、posframe、yasnippet
 - neotree、nerd-icons
@@ -334,8 +343,9 @@ eyebrowse zoom-window diminish
 
 - 抹 mode line 上的 lighter 要写成 ~("")~，不是裸空串 ~""~：mode line 的 lighter 位认
   「列表形式的 lighter」，裸空串在 tty 的渲染路径里判成无效 —— 实测把 cdr 设成 ~""~
-  之后，四个被抹的 mode 在 mode line 上打出四个 ~*invalid*~。batch 里渲染不出这个
-  差别（实测同样返回空串），所以回归只能查结构：条目必须是列表、不能是裸字符串。
+  之后，每个被抹的 mode 都在 mode line 上打出一个 ~*invalid*~（当时四个）。batch 里
+  渲染不出这个差别（实测同样返回空串），所以回归只能查结构：条目必须是列表、
+  不能是裸字符串。
 - ~global-minor-mode-alist~ 在 Emacs 31 里**不存在**（实测 void-variable）。它只活到
   Emacs 24 那一代，全局 minor mode（which-key / auto-revert 这类）的 lighter 现在就
   挂在 ~minor-mode-alist~ 上，抹 lighter 只改一个表就够。

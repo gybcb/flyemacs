@@ -18,8 +18,14 @@
         org-directory "~/gtd")
 
   ;; 编辑体验
+  ;; 注：这里故意不设 org-edit-src-content-indentation。Org 9.8 起它已废弃（实测
+  ;; byte-obsolete-variable = (nil "Org 9.8")，没给替代名），而且 9.10.3 的 docstring
+  ;; 明写 “It has no effect if `org-src-preserve-indentation' is non-nil” —— 下面就是 t，
+  ;; 所以留着只会多一个废弃告警。接替名 org-src-content-indentation 本机也在（实测
+  ;; (require (quote org-src)) 后 boundp=t），但它在 preserve-indentation 非 nil 时同样
+  ;; 无效，而本块跑在 with-eval-after-load 'org 里 —— 改名等于先于 org-src 的
+  ;; defcustom 赋值，不划算。
   (setq org-src-preserve-indentation t
-        org-edit-src-content-indentation 0
         org-log-done nil
         org-adapt-indentation nil
         org-cycle-include-plain-lists t

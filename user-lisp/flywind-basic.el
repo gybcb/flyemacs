@@ -75,5 +75,36 @@
 ;;;; 注释
 (global-set-key (kbd "C-c C-g") #'comment-or-uncomment-region)
 
+;;;; mode line 上的噪音 lighter
+;;
+;; 不用 ELPA 的 diminish 包，两条实测理由：
+;;   * Emacs 31 里它不是内建（emacs -Q 下 fboundp 为 nil），而抹 lighter 发生在 init
+;;     期，调它等于在启动路径上多加载一个包；
+;;   * byte-comp 时编译环境里没有它的 autoload，直接报
+;;     “the function 'diminish' is not known to be defined”。
+;; 对「条目已经在 alist 里」的 mode，diminish 做的事就是换掉那个 cdr，这里等价。
+(defconst flywind--empty-minor-mode-lighter '("")
+  "抹 lighter 时写进去的形态：空串外面包一层列表。
+裸空串在 tty 的 mode line 渲染路径里会被判成无效，打出 *invalid*（实测）。
+mode line 认的是列表形式的 lighter，真 diminish 产出的也是这个形态。")
+
+(defun flywind-hide-minor-mode-lighter (mode)
+  "抹掉 minor mode MODE 在 mode line 上的 lighter（原地改 alist）。
+只改 `minor-mode-alist' 一个表：老 Emacs（24 那代）另有个
+`global-minor-mode-alist' 放全局 minor mode 的 lighter，Emacs 31 里它已经不存在
+（实测 void-variable），which-key / volatile-highlights 这类全局 mode 的 lighter
+实测就挂在 `minor-mode-alist' 上，改一个表就够。
+
+MODE 还没加载时本函数是空转：alist 里还拿不到它的条目。所以要么在 use-package
+的 :config 里调（那时包已经加载），要么包在 `with-eval-after-load' 里。"
+  ;; 形态必须是 '("")：mode line 的 lighter 位认「列表形式的 lighter」，裸空串在
+  ;; tty 的 C 渲染路径里判成无效（实测四个被抹的 mode 打出四个 *invalid*）。
+  ;; 另有 (MODE MODE LIGHTER) 这种形状，整段换掉会破坏结构，按 diminish 的做法在
+  ;; lighter 位前放一个 'ignore 保住它。
+  (when-let* ((cell (assq mode minor-mode-alist)))
+    (setcdr cell (if (and (consp (cdr cell)) (eq (nth 1 cell) mode))
+                     (cons 'ignore flywind--empty-minor-mode-lighter)
+                   flywind--empty-minor-mode-lighter))))
+
 (provide 'flywind-basic)
 ;;; flywind-basic.el ends here

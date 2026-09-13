@@ -37,11 +37,13 @@
     volatile-highlights rainbow-mode rainbow-delimiters
     diredfl dired-rainbow dired-rsync
     multi-term shell-pop xterm-color
-    eyebrowse zoom-window
-    diminish)
+    eyebrowse zoom-window)
   "本配置需要的 ELPA 包清单（内置包不列入）。
 language server 与 tree-sitter 语法库也不列入：它们不走 package.el，
-见 `flywind-check-config' 的报告与 README.org 的安装命令。")
+见 `flywind-check-config' 的报告与 README.org 的安装命令。
+
+不装 diminish：抹 mode line 上的噪音 lighter 由 flywind-basic.el 自己改
+`minor-mode-alist'（详见 `flywind-hide-minor-mode-lighter'）。")
 
 (defun flywind--missing-packages ()
   "返回 `flywind-packages' 中尚未安装的包。"

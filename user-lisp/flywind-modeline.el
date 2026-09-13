@@ -154,11 +154,6 @@ t      = 强制开。nil = 用 ASCII 标记（终端不是 Nerd Font 时用这�
   :type '(alist :key-type string :value-type symbol)
   :group 'flywind-modeline)
 
-(defconst flywind-modeline--empty-lighter '("")
-  "抹 lighter 时写进去的形态：空串外面包一层列表。
-裸空串在 tty 的 mode line 渲染路径里会被判成无效，打出 *invalid*（实测）。
-mode line 认的是列表形式的 lighter，真 diminish 产出的也是这个形态。")
-
 (defcustom flywind-modeline-hidden-minor-modes
   '(which-key-mode eldoc-mode hungry-delete-mode auto-revert-mode)
   "这些 minor mode 不在 mode line 上占位。
@@ -166,43 +161,28 @@ mode line 认的是列表形式的 lighter，真 diminish 产出的也是这个�
 ` h'（hungry-delete）、`ElDoc'（echo area 本来就在给文档）、`ARev'
 （auto-revert-mode —— 它是 flywind-dired 里 global-auto-revert-mode 顺带开的，
 每个 buffer 都挂一个，等于没有信息）。
-空 lighter 的几个（volatile-highlights / whitespace / rainbow-delimiters）
-本来就不渲染，不用列在这里，它们的 :diminish 留在各自模块里。"
+volatile-highlights / whitespace / rainbow-mode 的 lighter 是可见文字（实测
+` VHl' / ` ws' / ` Rbow'），归 flywind-ui.el 自己抹；rainbow-delimiters-mode 的
+lighter 真的是空串，本来就不渲染，不用列在这里。"
   :type '(repeat symbol)
   :group 'flywind-modeline)
 
-(defun flywind-modeline--hide-lighter (mode)
-  "把 MODE 在 mode line 上的 lighter 抹成空串。
-只改 `minor-mode-alist' 就够：老 Emacs（24 那代）另有个
-`global-minor-mode-alist' 存全局 minor mode 的 lighter，Emacs 31 里它已经不存在
-（实测 void-variable），which-key / auto-revert 这类全局 minor mode 的 lighter
-实测就挂在 `minor-mode-alist' 上。
-
-不用 `diminish' 包：它在 Emacs 31 里不是内建（emacs -Q 下 fboundp 为 nil），
-而本模块要在 init 期间就跑 —— 调它等于在启动期顺带加载一个包，字节编译时还会
-报 not known to be defined。对「条目已经在 alist 里」的 mode，diminish 做的事
-就是换掉 cdr，这里等价。"
-  ;; 抹成什么形态有讲究：裸空串 `""' 在 tty 的 C 渲染路径里判成无效，mode line
-  ;; 上会打出 *invalid*（实测）。要包一层列表 —— `("\")' 这种形式才是 mode line
-  ;; 认的 lighter 形态，真 diminish 产出的也是它。
-  ;; 另有 (MODE MODE LIGHTER) 这种全局化 minor mode 的形状，直接把 cdr 换掉会破坏
-  ;; 结构，按 diminish 的做法在 lighter 位前放一个 'ignore 保住形状。
-  (when-let* ((cell (assq mode minor-mode-alist)))
-    (setcdr cell (if (and (consp (cdr cell)) (eq (nth 1 cell) mode))
-                     (cons 'ignore flywind-modeline--empty-lighter)
-                   flywind-modeline--empty-lighter))))
-
 (defun flywind-modeline--hide-noise-lighters ()
   "抹掉 `flywind-modeline-hidden-minor-modes' 里所有已加载的 lighter。
+动作本身在 flywind-basic.el 的 `flywind-hide-minor-mode-lighter'。
 还没加载的由 `after-load-functions' 补：换掉 alist 只对该 mode 加载之后的
 `minor-mode-alist' 生效，太早改是空转。"
   (interactive)
   (dolist (mode flywind-modeline-hidden-minor-modes)
-    (flywind-modeline--hide-lighter mode)))
+    (flywind-hide-minor-mode-lighter mode)))
 
+;; 用 bound-and-true-p 而不是裸 when：本 hook 在文件里就装上了，`flywind-modeline-mode'
+;; 那个 symbol 要到文件后面的 define-minor-mode 才存在。启动期自动字节编译时，编译
+;; 过程会加载别的 feature 并触发这个 hook —— 那时 symbol 还是 void，裸 when 直接报
+;; “Symbol’s value as variable is void”，实测连带 8 个文件编译失败。
 (add-hook 'after-load-functions
           (lambda (_file)
-            (when flywind-modeline-mode
+            (when (bound-and-true-p flywind-modeline-mode)
               (flywind-modeline--hide-noise-lighters))))
 
 (defconst flywind-modeline-ascii-icon "?")

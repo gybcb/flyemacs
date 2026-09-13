@@ -660,21 +660,25 @@ Emacs 文档要求这里写得像 process filter 一样小心：只做一次带�
   :hook (prog-mode . rainbow-delimiters-mode))
 
 (use-package volatile-highlights
-  :diminish volatile-highlights-mode
   :config
-  (volatile-highlights-mode 1))
+  (volatile-highlights-mode 1)
+  ;; 那个 lighter 是实打实的 “ VHl”（实测），不是空串：不抹就在 mode line 上常驻。
+  ;; 动作本身已在屏幕上高亮了一下，lighter 不带信息。
+  (flywind-hide-minor-mode-lighter 'volatile-highlights-mode))
 
 (use-package rainbow-mode
-  :diminish rainbow-mode
   :hook ((emacs-lisp-mode . rainbow-mode)
-         (css-mode . rainbow-mode)))
+         (css-mode . rainbow-mode))
+  :config
+  ;; 同上：lighter 是 “ Rbow”。颜色已经染在字面量上了，不用占 mode line 一格。
+  ;; :config 跑在包加载之后，所以这里调得到（mode 没加载时抹是空转）。
+  (flywind-hide-minor-mode-lighter 'rainbow-mode))
 
 ;; ---------------------------------------------------------------------------
 ;; 空白可视化（只提示，不改文件）
 ;; ---------------------------------------------------------------------------
 (use-package whitespace
   :ensure nil
-  :diminish whitespace-mode
   :hook ((prog-mode conf-mode) . whitespace-mode)
   :config
   ;; 31 起 whitespace-cleanup 会补 EOF 换行，配合 auto-cleanup 会静默改文件，
@@ -682,7 +686,9 @@ Emacs 文档要求这里写得像 process filter 一样小心：只做一次带�
   (setq whitespace-action nil
         whitespace-line-column fill-column
         whitespace-style '(face trailing space-before-tab
-                              indentation empty space-after-tab)))
+                              indentation empty space-after-tab))
+  ;; lighter 是 “ ws”：空白已经用 face 画出来了，这一格没信息。
+  (flywind-hide-minor-mode-lighter 'whitespace-mode))
 
 ;; 保存时只删行尾空白（Emacs 31 内置，取代废弃的 write-file-functions）
 (use-package simple

@@ -11,7 +11,7 @@ README.org 讲「怎么做、装什么」，本文讲「长什么样、谁依赖
 | 标记       | 含义                             | 例子                                  |
 |------------+----------------------------------+---------------------------------------|
 | =（内置）=   | Emacs 31 自带，不需要装          | =eglot=、=windmove=、=conf-unix-mode=  |
-| =（ELPA）=   | package.el 装的包，共 21 个      | =vertico=、=magit=、=diredfl=          |
+| =（ELPA）=   | package.el 装的包，共 20 个      | =vertico=、=magit=、=diredfl=          |
 | =（外部）=   | Emacs 进程外的程序或资源         | =taplo=、=shellcheck=、语法库 =.dylib= |
 
 线型：
@@ -49,7 +49,7 @@ early-init.el                                   ~0.00s 量级
   v
 init.el                                         ~0.15s，几乎全是 doom-themes
   |-- package-initialize（读已装包清单，不联网）
-  |-- flywind-packages = 21 个包名（清单，不是安装动作）
+  |-- flywind-packages = 20 个包名（清单，不是安装动作）
   |-- 自有 .el 按时间戳字节编译（early-init.el / init.el / user-lisp/*.el）
   |     只碰自己的文件，绝不递归扫第三方目录。
   |     为什么留在启动期：过期的 .elc 会静默盖住源码改动，
@@ -166,9 +166,13 @@ MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppea
    ~\(...\)~ + ~match-string 1~。
 6. 图标码位来自 nerd-icons 数据表，再用 ~fc-query --format=%{charset}~ 对 TTF 验
    过覆盖。回归里有条断言查「两张映射表的值都在码位表里」：写错图标名是静默失效。
-   同理，抹 lighter 只能改已加载 mode 的条目（本模块自己改 ~minor-mode-alist~，写成
-   ~("")~：裸空串在 tty 会渲染成 ~*invalid*~，而 batch 里看不出来），晚加载的以
-   ~after-load-functions~ 补。
+   同理，抹 lighter 只能改已加载 mode 的条目：动作在 flywind-basic.el 的
+   ~flywind-hide-minor-mode-lighter~（写成 ~("")~：裸空串在 tty 会渲染成 ~*invalid*~，
+   而 batch 里看不出这个差别），晚加载的以 ~after-load-functions~ 补。
+   flywind-ui.el 的 volatile-highlights / whitespace / rainbow-mode 走同一个函数：
+   它们原先用 ~:diminish~ 关键字，而三者的 lighter 实测是可见文字 ~ VHl~ / ~ ws~ /
+   ~ Rbow~（不是空串，不抹就常驻）。改成 :config 里直接调之后，diminish 包整个
+   从清单删了 —— 它不是 Emacs 31 内建，留着就是启动路径上多一个包。
 
 ** config 模块：这个配置的核心
 
@@ -198,14 +202,14 @@ MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppea
 submodule 归零：.gitmodules 与 module/ 目录已删。外部依赖只剩 ELPA 包、
 language server、shellcheck 和语法库 =.dylib=。
 
-** ELPA 21 个包按归属
+** ELPA 20 个包按归属
 
 | 归属     | 包                                                                    |
 |----------+-----------------------------------------------------------------------|
 | completion | vertico、orderless、marginalia、consult                                            |
 | git      | magit                                                                 |
-| ui       | doom-themes、doom-modeline、rainbow-mode、rainbow-delimiters、diminish |
-| basic    | easy-kill、hungry-delete、volatile-highlights                           |
+| ui       | doom-themes、doom-modeline、rainbow-mode、rainbow-delimiters          |
+| basic    | easy-kill、hungry-delete                                              |
 | dired    | diredfl、dired-rainbow、dired-rsync                                   |
 | window   | eyebrowse、zoom-window                                                |
 | shell    | multi-term、shell-pop、xterm-color                                    |
@@ -270,7 +274,7 @@ yaml / toml / bash 三个 server 不依赖这一项。
 | 节 | 检查                      | 失败含义                     |
 |----+---------------------------+------------------------------|
 | 1  | 自有 .el 能否字节编译     | 配置本身坏了（Error 优先修） |
-| 2  | 21 个 ELPA 包是否都在     | 装 =flywind-install-missing-packages= |
+| 2  | 20 个 ELPA 包是否都在     | 装 =flywind-install-missing-packages= |
 | 3  | 三个语法库是否就位        | mode 会落退路                |
 | 4  | 四个 language server 可执行否 | 对应格式不做校验           |
 

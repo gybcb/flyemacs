@@ -136,6 +136,38 @@ Emacs 31 的 toolkit-theme 本来就会随系统主题自动更新，但它只�
 MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppearance 的代码），
 所以 Mac 上这一步必须自己查外部程序。ns-appearance 不设：不设才由 macOS 自己管标题栏。
 
+** modeline：自己拼一条，而不是装一条
+
+#+begin_example
+  flywind-modeline.el ─┬─ flywind-modeline--identity  ─┐ 图标 + buffer 名 + 未保存/只读
+                        ├─ flywind-modeline--vc        ─┤ 从 vc-mode 那根串剔分支
+                        ├─ flywind-modeline--coding    ─┤ UTF-8 LF / CRLF
+                        └─ mode-line-modes / misc-info ─┘ major+minor / eglot+flycheck+时间
+#+end_example
+
+| 实现               | 启动   | 单次渲染 | 备注                              |
+|--------------------+--------+----------+-----------------------------------|
+| ~flywind-modeline~ | 0.279s |   140 us | 三个 :eval，其余走 C 侧 % 转义       |
+| Emacs 默认         | 0.296s |   208 us |                                     |
+| ~doom-modeline~    | 0.347s |   560 us | 每重绘一批 :eval（含 project-current）|
+
+六个坑：
+
+1. 原来 doom-modeline 压根没生效：~use-package~ 块在 ~(when (display-graphic-p)
+   ...)~ 里，终端跑的时候整块被跳过。tty 里看到的一直是 Emacs 默认那条。
+2. ~mode-line-format~ 对所有 buffer 都 buffer-local，在 ~define-minor-mode~ 体里
+   用 ~setq~ 只改到当时那个 buffer —— 模式显示已开，新开的 buffer 仍旧条。必须
+   ~setq-default~。
+3. 默认那条要在加载时就抓住（~flywind-modeline--stock-format~ 的 defvar 初始值）：
+   等开启时才存，先关再开 / 先 doom 再切回来就拿到脏值，实测把 mode line 设成 nil。
+4. ~%z~ 给出的是终端编码（tty 下渲染成 ~UUU~），不是文件的。配置文件要盯的是
+   LF/CRLF，所以自己读 ~buffer-file-coding-system~ + ~coding-system-eol-type~。
+5. elisp 正则没有 PCRE 的 ~\(?1:~ —— 不报错，只会静默拿不到分组。分支解析用普通
+   ~\(...\)~ + ~match-string 1~。
+6. 图标码位来自 nerd-icons 数据表，再用 ~fc-query --format=%{charset}~ 对 TTF 验
+   过覆盖。回归里有条断言查「两张映射表的值都在码位表里」：写错图标名是静默失效。
+   同理，~diminish~ 只能改已加载 mode 的 lighter，以 ~after-load-functions~ 补。
+
 ** config 模块：这个配置的核心
 
 #+begin_example

@@ -23,9 +23,15 @@
 ;;; Code:
 
 (require 'cl-lib)
-;; 测的就是这个模块；不 require 进来的话，编译期不认识它的内部变量，
-;; 会报一堆 "reference to free variable"，而且 let 绑定会被当成词法绑定。
+;; 测的就是这两个模块；不 require 进来的话编译期不认识它们的内部变量，会报一堆
+;; "reference to free variable"，而且 let 绑定会被当成词法绑定。
 (require 'flywind-ui)
+(require 'flywind-modeline)
+(require 'vc)
+;; 本文件 lexical-binding 是 t：没被 defvar 标记成 special 的变量，let 只建词法
+;; 绑定，被测函数读不到（实测分支解析因此静默返回 nil）。vc-mode 再 defvar 一次
+;; 确保它是动态的。
+(defvar vc-mode)
 
 (defvar flywind-tests--pass 0 "本轮通过数。")
 (defvar flywind-tests--fail 0 "本轮失败数。")
@@ -394,6 +400,158 @@ getenv 被整体换掉，其它名字转发给真的那个。"
       (flywind-tests--check "follow-system 丢掉钉住" nil flywind-theme-force)
       (flywind-tests--check "follow-system 抹掉本格缓存后重探出结果" t
                  (and (memq (flywind-theme--read-cache) '(light dark)) t)))))
+  (princ "\n== L. mode line（flywind-modeline）==\n")
+  (require 'flywind-modeline)
+  (let ((orig-mode flywind-modeline-mode)
+        (orig-impl flywind-modeline-implementation))
+    (unwind-protect
+        (progn
+          ;; --- 图标映射：整名正则优先，扩展名其次 ---
+          (dolist (pair '(("init.el" . code) (".gitignore" . git)
+                          (".gitmodules" . git) (".gitconfig" . git)
+                          ("config.json" . json) ("a.jsonc" . json)
+                          ("a.yaml" . yaml) ("a.yml" . yaml)
+                          ("x.toml" . toml) ("x.ini" . config) ("x.conf" . config)
+                          (".editorconfig" . config) (".tmux.conf" . terminal)
+                          (".bashrc" . terminal) (".env" . key) ("ssh_config" . key)
+                          ("README.md" . markdown) ("a.py" . python) ("a.go" . go)))
+            (flywind-tests--check (format "图标 %s -> %s" (car pair) (cdr pair))
+              (cdr pair) (flywind-modeline--icon-name (car pair))))
+          (dolist (n '("Brewfile" "*scratch*" "noextension"))
+            (flywind-tests--check (format "无匹配 %s -> nil（走通用图标）" n)
+              nil (flywind-modeline--icon-name n)))
+          ;; 映射表里写错图标名是静默失效（码位查不到就不显示），拿码位表兜底查一遍。
+          (flywind-tests--check "两张映射表的值都在码位表里" nil
+            (let (miss)
+              (dolist (p (append flywind-modeline-name-icons
+                                 flywind-modeline-ext-icons))
+                (unless (assq (cdr p) flywind-modeline-glyph)
+                  (push (car p) miss)))
+              miss))
+          (flywind-tests--check "码位表全落在私用区（不是打错的 ASCII）" t
+            (seq-every-p (lambda (p) (>= (cdr p) #xe000)) flywind-modeline-glyph))
+          ;; --- 图标开关的退回 ---
+          (flywind-tests--check "图标开着出单个码位" t
+            (let ((g (flywind-modeline--glyph 'json t "?")))
+              (and (stringp g) (= 1 (length g)) (= #xe60b (aref g 0)))))
+          (flywind-tests--check "图标关掉退回 ASCII 标记" "?"
+            (flywind-modeline--glyph 'json nil "?"))
+          (with-temp-buffer
+            (rename-buffer "x.json")
+            (let* ((flywind-modeline-icons nil)
+                   (buffer-file-name "/tmp/x.json")
+                   (s (flywind-modeline--identity)))
+              (flywind-tests--check "ASCII 模式下不出私用区字符" nil
+                (seq-some (lambda (c) (and (>= c #xe000) (<= c #xf8ff))) s))
+              (flywind-tests--check "ASCII 模式仍带 buffer 名" t
+                (and (string-match-p "x\\.json" s) t))))
+          ;; --- 状态标记（未保存 / 只读）---
+          (with-temp-buffer
+            (rename-buffer "state.json")
+            (let ((flywind-modeline-icons t)
+                  (buffer-file-name "/tmp/state.json"))
+              (flywind-tests--check "未修改时不带状态标记" nil
+                (string-match-p "●\\|\\*\\|R" (flywind-modeline--identity)))
+              (set-buffer-modified-p t)
+              (flywind-tests--check "未保存出标记（● 或铅笔码位）" t
+                (let ((id (flywind-modeline--identity)))
+                  (or (and (string-match-p "●\\|\\*" id) t)
+                      (seq-some (lambda (c) (= c #xf040)) id)))); 铅笔
+              (set-buffer-modified-p nil)
+              (setq buffer-read-only t)
+              (flywind-tests--check "只读出标记（R 或 lock 码位）" t
+                (let ((s (flywind-modeline--identity)))
+                  (or (and (string-match-p "R" s) t)
+                      (seq-some (lambda (c) (= c #xf023)) s))))))
+          ;; --- buffer 名截断 ---
+          (with-temp-buffer
+            (rename-buffer (make-string 40 ?a))
+            (let ((flywind-modeline-buffer-name-width 12)
+                  (flywind-modeline-icons nil))
+              (flywind-tests--check "buffer 名按宽度截断" t
+                (<= (length (flywind-modeline--identity)) (+ 12 8)))))
+          ;; --- 分支解析：不起 git，只剔 vc-mode 那根串 ---
+          (flywind-tests--check "无 vc-mode 不出分支段" nil
+            (let ((vc-mode nil)) (flywind-modeline--vc)))
+          (dolist (case '((" Git-main" "main") (" Git:main" "main")
+                          (" SVN1.7:trunk" "trunk") (" Git-main*" "main*")
+                          (" Hg-default" "default")))
+            (flywind-tests--check (format "分支 %S -> %s" (car case) (cadr case))
+              t
+              (let ((vc-mode (car case))
+                    (flywind-modeline-show-vc t)
+                    (flywind-modeline-icons nil))
+                (and (stringp (flywind-modeline--vc))
+                     (string-match-p (regexp-quote (cadr case))
+                                     (flywind-modeline--vc))
+                     t)))))
+          (flywind-tests--check "关掉开关就不出分支段" nil
+            (let ((vc-mode " Git-main") (flywind-modeline-show-vc nil))
+              (flywind-modeline--vc)))
+          ;; --- 编码与行尾：配置文件真正关心这个；%z 给出的是终端编码 ---
+          (flywind-tests--check "没访文件不出编码段" nil
+            (let ((buffer-file-name nil)) (flywind-modeline--coding)))
+          (with-temp-buffer
+            (setq-local buffer-file-name "/tmp/x.json")
+            (dolist (case '((utf-8-unix "UTF-8" "LF")
+                            (utf-8-dos "UTF-8" "CRLF")
+                            (utf-8-mac "UTF-8" "CR")
+                            (gb18030-unix "GB18030" "LF")))
+              (flywind-tests--check
+               (format "编码 %S -> %s / %s" (car case) (cadr case) (nth 2 case))
+               t
+               (let ((buffer-file-coding-system (car case)))
+                 (setq buffer-file-coding-system (car case))
+                 (let ((s (flywind-modeline--coding)))
+                   (and (stringp s)
+                        (string-match-p (cadr case) s)
+                        (string-match-p (nth 2 case) s)
+                        t)))))
+          ;; --- 开关与还原：这里守 setq vs setq-default 那个坑 ---
+          (flywind-tests--check "加载时抓住了 Emacs 默认那条" t
+            (listp flywind-modeline--stock-format))
+          (flywind-modeline-mode 1)
+          (flywind-tests--check "开启后改的是全局默认值（不是当时那个 buffer）" t
+            (let ((fmt (default-value 'mode-line-format)))
+              (and (listp fmt)
+                   (seq-some (lambda (e) (and (listp e) (eq (car e) :eval))) fmt)
+                   (null (seq-position fmt "%e")))))
+          (dolist (mode '(hungry-delete-mode which-key-mode eldoc-mode
+                           auto-revert-mode))
+            (flywind-tests--check
+             (format "%s 的 lighter 已抹平" mode)
+             t
+             (let ((lighter (cdr (assq mode minor-mode-alist))))
+               (and (member (if (stringp lighter) lighter (car-safe lighter))
+                            '("" nil))
+                    t))))
+          ;; 格式里裸符号出现的意思是「取这个变量的值」，名字打错就静默少一段。
+          (flywind-tests--check "格式里引用的内置变量都存在" nil
+            (let (miss)
+              (dolist (e (flywind-modeline--format))
+                (when (and (symbolp e) (not (keywordp e)) (not (boundp e)))
+                  (push e miss)))
+              miss))
+          (flywind-modeline-mode -1)
+          (flywind-tests--check "关掉后回到 Emacs 默认那条" t
+            (equal (default-value 'mode-line-format)
+                   flywind-modeline--stock-format))
+          ;; doom 档：包没装就算跳过，不算失败。
+          (if (not (require 'doom-modeline nil t))
+              (progn
+                (cl-incf flywind-tests--skip 2)
+                (princ "SKIP doom 档 2 条（本机没装 doom-modeline）\n"))
+            (setq flywind-modeline-implementation 'doom)
+            (flywind-modeline-mode 1)
+            (flywind-tests--check "doom 档也给出非空 mode line" t
+              (and (listp (default-value 'mode-line-format))
+                   (bound-and-true-p doom-modeline-mode)))
+            (flywind-modeline-mode -1)
+            (flywind-tests--check "从 doom 档切回来不残留" t
+              (equal (default-value 'mode-line-format)
+                     flywind-modeline--stock-format))))
+      (setq flywind-modeline-implementation orig-impl)
+      (flywind-modeline-mode (if orig-mode 1 -1))))
             )
           (delete-file cache)
           ;; 用例里会 apply 主题，跑完还原成用户原本在看的方向。
@@ -412,10 +570,12 @@ getenv 被整体换掉，其它名字转发给真的那个。"
 
 (defun flywind-tests-run-batch ()
   "批处理入口：打印明细，有失败就以退出码 1 结束。"
-  (let* ((res (append (flywind-tests-run) (list flywind-tests--skip)))
-         (failed (cadr res)))
-    (message "flywind-tests: %d PASS / %d FAIL / %d SKIP" (car res) failed
-             (cdr (cdr res)))
+  ;; 注意别拿 append 去接 flywind-tests-run 的返回值：它给的是 (通过数 . 失败数)
+  ;; 这种非正规表，append 会直接 Wrong type argument: listp。
+  (let* ((res (flywind-tests-run))
+         (failed (cdr res)))
+    (message "flywind-tests: %d PASS / %d FAIL / %d SKIP"
+             (car res) failed flywind-tests--skip)
     (kill-emacs (if (> failed 0) 1 0))))
 
 (provide 'flywind-tests)

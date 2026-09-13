@@ -16,8 +16,7 @@
 (eval-when-compile
   (require 'volatile-highlights)
   (require 'rainbow-delimiters)
-  (require 'doom-themes)
-  (require 'doom-modeline))
+  (require 'doom-themes))
 
 ;; ---------------------------------------------------------------------------
 ;; 帧装饰
@@ -629,12 +628,10 @@ Emacs 文档要求这里写得像 process filter 一样小心：只做一次带�
 (when (display-graphic-p)
   ;; org 表格字体：见 `flywind-org-table-font-family'；只设一次，不动态改 fontset。
   (with-eval-after-load 'org
-    (flywind--apply-org-table-font))
+    (flywind--apply-org-table-font)))
 
-  (use-package doom-modeline
-    :hook (after-init . doom-modeline-mode)
-    :custom
-    (doom-modeline-buffer-file-name-style 'relative-from-project)))
+;; modeline 在 flywind-modeline.el：它要由 init.el 紧跟本模块加载，因为得在
+;; 那时抓 Emacs 默认那条 `mode-line-format'（见 `flywind-modeline--stock-format'）。
 
 ;; TTY 下的时间显示
 (use-package time

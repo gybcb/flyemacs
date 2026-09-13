@@ -38,7 +38,8 @@ elpa/gnupg/        ELPA 签名校验用的 GPG keyring（保留原位置）
 | 模块                | 职责                                          | 启动期成本              |
 |---------------------+-----------------------------------------------+-------------------------|
 | ~flywind-basic~     | 基础行为、窗口/文件默认值、kill-ring 合并进来 | 变量赋值                |
-| ~flywind-ui~        | 主题、modeline、行号、视觉细节                | doom-themes 加载        |
+| ~flywind-ui~        | 主题（自动浅深色）、行号、视觉细节            | doom-themes 加载        |
+| ~flywind-modeline~  | mode line：自己那条，doom-modeline 当可选档  | 一个 ~setq-default~      |
 | ~flywind-config~    | **核心**：mode 映射、语法库、eglot 校验          | 只设 hook，不加载 eglot |
 | ~flywind-completion~| vertico / consult / orderless / marginalia    | 常驻                    |
 | ~flywind-dired~     | dired 与着色                                  | ~:defer t~，开 dired 才算 |
@@ -149,11 +150,57 @@ Ghostty 是个坑，而且坑了两层：
 - flywind-theme-probe-at-startup — 无缓存时允许启动同步探一次（默认 t）
 - flywind-theme-light-luminance — 终端背景亮度阈值，>= 它算浅色
 
+* mode line：为什么不用 doom-modeline
+
+你原来那条是 ~doom-modeline~。它其实一直没生效：~use-package~ 写在
+~(when (display-graphic-p) ...)~ 里，终端跑的时候整块被跳过 —— 你看到的从来是
+ Emacs 默认那条。要「快一点又好看」，就自己拼了一条 ~flywind-modeline~，
+~doom-modeline~ 留在清单里当可选档（~flywind-modeline-implementation~ 设成 ~doom~
+就切回去，当场生效）。
+
+本机（Apple Silicon + Ghostty tty）交替测三轮：
+
+| 实现               | 启动   | 单次渲染 | 相对默认 |
+|--------------------+--------+----------+----------|
+| ~flywind-modeline~ | 0.279s |   140 us | 0.7x     |
+| Emacs 默认         | 0.296s |   208 us | 1.0x     |
+| ~doom-modeline~    | 0.347s |   560 us | 2.7x     |
+
+自己这条比默认还便宜一点：~mode-line-format~ 里只三个 ~:eval~（身份、分支、编码），
+其余走 C 侧的 ~%l~ / ~%c~ / ~%P~ 转义与内置的 ~mode-line-modes~。~doom-modeline~
+每次重绘都要跑一批 ~:eval~（包括 ~project-current~ 那类目录探索），那是它慢的主因。
+
+长相（~│~ 是分隔符，图标用 Nerd Font 码位）：
+
+#+begin_example
+   init.el │ ⑂ master │ UTF-8 LF  1:0 All  (Elisp/l)
+  .gitignore │ ⑂ master │ UTF-8 LF  1:0 All  (Conf[Unix])
+#+end_example
+
+四条约束，改之前先看 ~flywind-modeline.el~ 顶部注释：
+
+- 颜色一律 ~:inherit~ 主题已经管好的 face。主题会在浅 / 深之间自动翻（见上一节），
+  写死的颜色在那边一定翻车。
+- 图标码位不是猜的：名字取自 nerd-icons 的数据表，再用 ~fc-query~ 对
+  ~JetBrainsMonoNerdFont-Regular.ttf~ 的 cmap 逐个验过存在。Ghostty 的
+  ~font-family~ 也是同一个 Nerd Font，所以 tty 与 GUI 同一套字形。终端不是
+  Nerd Font 就把 ~flywind-modeline-icons~ 设 nil 退回 ASCII，否则是豆腐。
+- 渲染路径上零 I/O：分支从 ~vc-mode~ 那根串里剔，不起 git；只读状态取
+  ~buffer-read-only~，不用 ~file-writable-p~ 去 stat。
+- 编码段读 ~buffer-file-coding-system~，显示成 ~UTF-8 LF~。~%z~ 不行 —— 它给的是
+  终端自己的编码（实测 tty 里渲染成 ~UUU~），而配置文件真正要盯的是 LF / CRLF。
+
+顺带收掉四个纯噪音 lighter：~WK~（which-key）、~ h~（hungry-delete）、~ElDoc~、
+~ARev~（flywind-dired 里 ~global-auto-revert-mode~ 顺带挂的）。它们每个 buffer 都
+占一格又不带信息，清单见 ~flywind-modeline-hidden-minor-modes~。
+
 * 常用命令
 
 - ~M-x flywind-check-config~ — 体检，结果写进 ~*flywind-check-config*~：字节编译
   有无 Error/Warning、ELPA 缺哪些包、三个语法库是否就位、四个 language server
   是否可执行。带 ~C-u~ 前缀全量重编，把每个文件的警告重现一遍。
+- ~M-x flywind-modeline-report~ — 当前 mode line 用哪条实现、图标开没开、单次
+  渲染多少微秒，外加一行样例与可调变量。
 - ~M-x flywind-tests-run~ — 主题跟随的回归用例（102 项断言），明细在
   ~*flywind-tests*~。缓存绑到临时文件，不碰 ~.local/cache~ 里真那份，跑完把主题
   还原成跑之前的方向。命令行跑法见下。
@@ -258,6 +305,9 @@ eyebrowse zoom-window diminish
 权威清单在 ~init.el~ 的 ~flywind-packages~；~.local/etc/custom.el~ 里的
 ~package-selected-packages~ 由 ~flywind-sync-package-selected-packages~ 同步，
 不要手改。
+
+~doom-modeline~ 留在清单里是给人留着的那条退路：~flywind-modeline-implementation~
+设成 ~doom~ 才会 ~require~ 它（实测见「mode line」一节）。默认值下它不参与启动。
 
 * 已移除
 

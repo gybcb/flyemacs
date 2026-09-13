@@ -129,6 +129,7 @@ package.el 的 `package-autoremove' / `package-menu' 依赖这个变量判断哪
 ;; dired/git/shell 里的包全部懒加载，require 本身几乎不花钱。
 (require 'flywind-basic)
 (require 'flywind-ui)
+(require 'flywind-modeline)
 (require 'flywind-config)
 (require 'flywind-completion)
 (require 'flywind-dired)

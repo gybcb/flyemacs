@@ -354,6 +354,24 @@ eyebrowse zoom-window
 - TOML 有两个候选：~taplo~ 与 ~tombi~（Emacs 31 eglot 默认项）。装了 taplo 就用
   taplo；本机现在用的是 tombi。改了 ~flywind-config-lsp-programs~ 要重启 Emacs
   ——~eglot-server-programs~ 只在 eglot 加载时算一次。
+- 自有 ~.el~ 冷编译（先删 ~.elc~）必须零告警，不是「能过就行」。三类告警各有固定
+  解法，实测都落在本配置里：
+  * 在 =with-eval-after-load= 里写别的包的变量（=eglot-server-programs=
+    =treesit-language-source-alist=）→ 报 free variable，补
+    =(eval-when-compile (require 'eglot) (require 'treesit))=（只编译期加载，
+    运行时不靠它）。
+    注意别看到告警就当变量名写错：=treesit-auto-install-grammar= 是 Emacs 31 的
+    真变量（实测 boundp，默认 =ask=，就是那个联网提问）。
+  * 文件头 =eval-when-compile (require 'dired)= 会让编译器「只在编译期认识」某些函数，
+    于是报 might not be defined at runtime —— 运行时保证已经在 =with-eval-after-load=
+    里了，这种假报用 =with-no-warnings= 压掉并写清理由。
+  * 废弃变量先看 docstring 再决定改名还是删。=org-edit-src-content-indentation= 在
+    Org 9.10.3 里明写 preserve-indentation 非 nil 时无效，而本机正是 t，所以直接删
+    （接替名也在，但本模块跑在 org-src 加载前，改名等于先于它的 defcustom 赋值）。
+  还有个只有冷编译才暴露的运行期坑：modeline 的 =after-load-functions= 回调裸用
+  =(when flywind-modeline-mode ...)=，而那个 symbol 要到同文件后面的
+  =define-minor-mode= 才存在 —— 启动期自动编译会触发这个 hook，实测连带 8 个文件
+  报 void-variable 编译失败。改成 =bound-and-true-p=。
 - 字节编译放在 ~flywind-check-config~ / ~flywind-byte-compile-config~ 里，不在启动期
   递归扫第三方目录；但自有 ~.el~ 仍在启动期按时间戳编（~.elc~ 过期会静默盖住
   源码改动，这个险不值得冒）。

@@ -49,7 +49,13 @@
 
 (with-eval-after-load 'dired
   (define-key dired-mode-map (kbd "C-c C-p") #'wdired-change-to-wdired-mode)
-  (define-key dired-mode-map (kbd "S") #'dired-sort-toggle-or-edit))
+  ;; 不包 with-no-warnings 会报 “dired-sort-toggle-or-edit might not be defined at
+  ;; runtime”，但那是文件头 eval-when-compile (require (quote dired)) 带来的：函数
+  ;; 只在编译期那个 session 里认识，编译器不敢保证运行时也有。实测只 (require
+  ;; (quote dired)) 之后它就 fboundp（要么就真是 autoload 件，两者运行时都能用），
+  ;; 而这里整块跑在 dired 加载之后，所以告警是假报。
+  (with-no-warnings
+    (define-key dired-mode-map (kbd "S") #'dired-sort-toggle-or-edit)))
 
 ;;;; 着色（都不在启动期加载）
 (use-package diredfl

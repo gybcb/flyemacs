@@ -192,7 +192,11 @@ Ghostty 是个坑，而且坑了两层：
 
 顺带收掉四个纯噪音 lighter：~WK~（which-key）、~ h~（hungry-delete）、~ElDoc~、
 ~ARev~（flywind-dired 里 ~global-auto-revert-mode~ 顺带挂的）。它们每个 buffer 都
-占一格又不带信息，清单见 ~flywind-modeline-hidden-minor-modes~。
+占一格又不带信息，清单见 ~flywind-modeline-hidden-minor-modes~。抹的动作是本模块
+自己改 ~minor-mode-alist~（写成 ~("")~），没依赖 ~diminish~ 包：走它的 autoload 会让
+byte-comp 报 ~the function 'diminish' is not known to be defined~，运行时还要白付一次
+启动磁盘读。~flywind-ui.el~ 里那三处 ~:diminish~ 仍经 ~use-package-diminish~ 加载那个
+包，所以它启动时照样在 —— 本模块只是不再依赖它，没省启动时间。
 
 * 常用命令
 
@@ -328,6 +332,13 @@ eyebrowse zoom-window diminish
 
 * 已知取舍
 
+- 抹 mode line 上的 lighter 要写成 ~("")~，不是裸空串 ~""~：mode line 的 lighter 位认
+  「列表形式的 lighter」，裸空串在 tty 的渲染路径里判成无效 —— 实测把 cdr 设成 ~""~
+  之后，四个被抹的 mode 在 mode line 上打出四个 ~*invalid*~。batch 里渲染不出这个
+  差别（实测同样返回空串），所以回归只能查结构：条目必须是列表、不能是裸字符串。
+- ~global-minor-mode-alist~ 在 Emacs 31 里**不存在**（实测 void-variable）。它只活到
+  Emacs 24 那一代，全局 minor mode（which-key / auto-revert 这类）的 lighter 现在就
+  挂在 ~minor-mode-alist~ 上，抹 lighter 只改一个表就够。
 - ini / ~.env~ / nginx / tmux / ssh_config / gitconfig 只高亮不校验：没有可靠的
   LSP，宁可没有诊断也不要错得离谱的诊断。
 - TOML 有两个候选：~taplo~ 与 ~tombi~（Emacs 31 eglot 默认项）。装了 taplo 就用

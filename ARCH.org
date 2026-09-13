@@ -166,7 +166,9 @@ MS-Windows，macOS 的 ns 构建不在其列（ns-win.el 里也没有读 NSAppea
    ~\(...\)~ + ~match-string 1~。
 6. 图标码位来自 nerd-icons 数据表，再用 ~fc-query --format=%{charset}~ 对 TTF 验
    过覆盖。回归里有条断言查「两张映射表的值都在码位表里」：写错图标名是静默失效。
-   同理，~diminish~ 只能改已加载 mode 的 lighter，以 ~after-load-functions~ 补。
+   同理，抹 lighter 只能改已加载 mode 的条目（本模块自己改 ~minor-mode-alist~，写成
+   ~("")~：裸空串在 tty 会渲染成 ~*invalid*~，而 batch 里看不出来），晚加载的以
+   ~after-load-functions~ 补。
 
 ** config 模块：这个配置的核心
 
@@ -202,8 +204,8 @@ language server、shellcheck 和语法库 =.dylib=。
 |----------+-----------------------------------------------------------------------|
 | completion | vertico、orderless、marginalia、consult                                            |
 | git      | magit                                                                 |
-| ui       | doom-themes、doom-modeline、rainbow-mode、rainbow-delimiters          |
-| basic    | easy-kill、hungry-delete、volatile-highlights、diminish               |
+| ui       | doom-themes、doom-modeline、rainbow-mode、rainbow-delimiters、diminish |
+| basic    | easy-kill、hungry-delete、volatile-highlights                           |
 | dired    | diredfl、dired-rainbow、dired-rsync                                   |
 | window   | eyebrowse、zoom-window                                                |
 | shell    | multi-term、shell-pop、xterm-color                                    |

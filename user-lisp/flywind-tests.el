@@ -537,15 +537,26 @@ getenv 被整体换掉，其它名字转发给真的那个。"
               (and (listp fmt)
                    (seq-some (lambda (e) (and (listp e) (eq (car e) :eval))) fmt)
                    (null (seq-position fmt "%e")))))
+          ;; 条目都不在就是本机没启用这个 mode，算跳过而不是空转通过
+          ;; （assq 拿不到条目时断言会恒真，那是假通过）。
           (dolist (mode '(hungry-delete-mode which-key-mode eldoc-mode
                            auto-revert-mode))
-            (flywind-tests--check
-             (format "%s 的 lighter 已抹平" mode)
-             t
-             (let ((lighter (cdr (assq mode minor-mode-alist))))
-               (and (member (if (stringp lighter) lighter (car-safe lighter))
-                            '("" nil))
-                    t))))
+            (let ((entries (delq nil (list (assq mode minor-mode-alist)))))
+              (if (not entries)
+                  (progn
+                    (cl-incf flywind-tests--skip)
+                    (princ (format "SKIP %s 本机没进任何 minor-mode alist\n" mode)))
+                (flywind-tests--check
+                 (format "%s 的 lighter 已抹平（%d 处）" mode (length entries))
+                 t
+                 ;; 形态必须是「列表包空串」；裸空串在 tty 会渲染成 *invalid*，
+                 ;; 而 batch 里渲染不出这个差别，所以只能查结构。
+                 (seq-every-p (lambda (cell)
+                                (let ((l (cdr cell)))
+                                  (and (consp l)
+                                       (or (equal l '(""))
+                                           (equal l '(ignore ""))))))
+                              entries)))))
           ;; 格式里裸符号出现的意思是「取这个变量的值」，名字打错就静默少一段。
           (flywind-tests--check "格式里引用的内置变量都存在" nil
             (let (miss)

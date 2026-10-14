@@ -20,8 +20,12 @@
 ;;    * server 不可用只 warn 一次并跳过，不阻塞启动、不弹窗。
 ;;
 ;; 外部命令（都不在启动路径上，装完即生效）：
-;;   npm i -g yaml-language-server vscode-langservers-extracted taplo bash-language-server
-;;   .sh 的语法诊断还要 shellcheck（brew install shellcheck）：没有它
+;;   npm i -g yaml-language-server vscode-langservers-extracted bash-language-server
+;;   TOML server 二选一：macOS 用 `brew install taplo'；Linux 用
+;;   `pacman -S tombi' 或 `npm i -g tombi'（taplo 不能走 npm：npm 上没有
+;;   taplo 包，官方 @taplo/cli 的构建不含 LSP）。
+;;   .sh 的语法诊断还要 shellcheck（brew install shellcheck / pacman -S
+;;   shellcheck）：没有它
 ;;   bash-language-server 只给符号跳转，不给语法错误。
 ;;
 ;;; Code:
@@ -54,7 +58,11 @@ alist 的第三个元素是仓库里 grammar 的相对目录。"
   :group 'flywind-config)
 
 (defcustom flywind-config-grammar-dir
-  (file-name-as-directory (locate-user-emacs-file "tree-sitter"))
+  ;; 必须是展开过 `~` 的绝对路径：neomacs 的 treesit 加载器（Rust 侧 dlopen）
+  ;; 不展开 `~`，而它的 `user-emacs-directory` 又是字面量 "~/.emacs.d/"，
+  ;; 默认值走 locate-user-emacs-file 会把带 `~` 的路径原样交给 dlopen，
+  ;; 结果 .so 明明装好了也报 "dlopen failed (not-found)"。
+  (file-name-as-directory (expand-file-name "tree-sitter" user-emacs-directory))
   "语法库的安装与搜索目录。"
   :type 'directory
   :group 'flywind-config)
@@ -65,6 +73,9 @@ alist 的第三个元素是仓库里 grammar 的相对目录。"
 ;; `flywind-install-treesit-grammars' 显式安装。
 (with-eval-after-load 'treesit
   (setq treesit-auto-install-grammar nil)
+  ;; neomacs 不展开搜索路径里的 `~`，必须把绝对目录加进 `treesit-extra-load-path'；
+  ;; GNU Emacs 默认目录本来就是同一个位置，多这一条无害。
+  (add-to-list 'treesit-extra-load-path flywind-config-grammar-dir 'append)
   (dolist (src flywind-config-treesit-sources)
     (add-to-list 'treesit-language-source-alist src)))
 

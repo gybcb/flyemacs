@@ -4,8 +4,12 @@
 ;;
 ;; ANSI 着色统一交给 xterm-color（因此从 comint-output-filter-functions
 ;; 里移除一次 ansi-color-process-output，避免双重处理）。
-;; 启动成本：multi-term / shell-pop / xterm-color 都靠 :bind/:custom 懒加载，
+;; 启动成本：eat / shell-pop / xterm-color 都靠 autoload/:bind/:custom 懒加载，
 ;; require 本模块只是设几个变量。
+;; 终端选型：不装 multi-term（没人调它）；选 eat 不选 vterm：eat 是纯 Elisp
+;; 终端仿真（自带 term/eat.el，不依赖 libvterm/编译链），macOS 与 neomacs
+;; 两侧都装完即用；vterm 需要 cmake + libvterm + 动态模块 API，本机跑不起来。
+;; 重输出场景（MB 级刷屏）vterm 更快，真有需要时再加，两者不互斥。
 ;; 平台判断就地写 `system-type'，不再有个 flywind-const 模块。
 ;;
 ;;; Code:
@@ -13,7 +17,40 @@
 (eval-when-compile
   (require 'shell-pop)
   (require 'xterm-color)
-  (require 'multi-term))
+  (require 'eat))
+
+(defgroup flywind-shell nil
+  "shell / terminal。"
+  :group 'convenience
+  :prefix "flywind-shell-")
+
+(defcustom flywind-shell-pop-shell-type "ansi-term"
+  "F9 底部弹层用的终端类型（`shell-pop-shell-type' 的开关）。
+只接两个预设：
+  \"ansi-term\" = 内置 term.el，默认；
+  \"eat\"       = 纯 Elisp 终端仿真，char mode / shell 集成更好。
+Windows 下无视本变量，固定 eshell（沿用原行为）。
+改了本变量要重开 F9 弹层才生效。eat 直接 `M-x eat' 时走普通 buffer（可
+C-x 1 顶满）；F9 那条才由 shell-pop 弹底部窗。"
+  :type '(choice (const :tag "ansi-term（内置，默认）" "ansi-term")
+                 (const :tag "eat（纯 Elisp 终端）" "eat"))
+  :group 'flywind-shell)
+
+(defun flywind-shell--pop-shell-type ()
+  "按 `flywind-shell-pop-shell-type' 给出 `shell-pop-shell-type' 的值。
+eat 那条与 shell-pop 自带预设同形（带 fboundp 守卫，不硬依赖）；
+shell-pop 升过预设里的 (eat shell-pop-term-shell)，这里沿用。"
+  (cond
+   ((eq system-type 'windows-nt)
+    '("eshell" "*eshell*" (lambda () (eshell))))
+   ((equal flywind-shell-pop-shell-type "eat")
+    '("eat" "*eat*"
+      (lambda ()
+        (when (fboundp 'eat)
+          (eat shell-pop-term-shell)))))
+   (t
+    '("ansi-term" "*ansi-term*"
+      (lambda () (ansi-term shell-pop-term-shell))))))
 
 (use-package shell
   :ensure nil
@@ -53,13 +90,6 @@
   (setq comint-output-filter-functions
         (remq 'ansi-color-process-output comint-output-filter-functions)))
 
-(use-package multi-term
-  ;; multi-term 没有 autoload，而只有 :custom 的 use-package 形式会直接 require。
-  ;; 它只在 shell-pop 拉 ANSI term 时才用得上，所以显式延后。
-  :defer t
-  :custom
-  (multi-term-program "/bin/zsh"))
-
 (use-package shell-pop
   :bind ([f9] . shell-pop)
   :custom
@@ -67,11 +97,15 @@
   (shell-pop-window-size 30)
   (shell-pop-window-position "bottom")
   :init
-  (setq shell-pop-shell-type
-        (if (eq system-type 'windows-nt)
-            '("eshell" "*eshell*" (lambda () (eshell)))
-          '("ansi-term" "*ansi-term*"
-            (lambda () (ansi-term shell-pop-term-shell))))))
+  (setq shell-pop-shell-type (flywind-shell--pop-shell-type)))
+
+;;;; eat：纯 Elisp 终端仿真（M-x eat 直接开；F9 走上面 shell-pop 那条）
+(use-package eat
+  :defer t
+  :custom
+  ;; 默认 128K 字符；配置文件编辑器场景下终端主要敲命令，留默认就够，
+  ;; 这里显式写出以免升级时丢参考。
+  (eat-term-scrollback-size 131072))
 
 (provide 'flywind-shell)
 ;;; flywind-shell.el ends here

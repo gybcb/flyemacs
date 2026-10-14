@@ -85,10 +85,10 @@ basic -----> ui -----> config -----> completion --+--> dired --> window --> git 
 | ui          | doom-themes（浅/深选一个载）/ 行号 / 噪音 lighter      | 启动期（本配置最大单项）   |
 | config      | mode 映射 + 语法库探测 + eglot hook                   | 启动期只设 hook            |
 | completion  | vertico + orderless + marginalia + consult            | 启动期；consult 走 autoload|
-| dired       | dired / dired-aux / dired-x / diredfl / dired-rainbow / dired-rsync | 第一次 C-x d |
+| dired       | dired / dired-x / diredfl / dired-rainbow / dired-rsync | 第一次 C-x d |
 | window      | windmove / winner / eyebrowse / zoom-window           | 变量即刻，zoom-window autoload |
 | git         | magit                                                 | 第一次 C-x g               |
-| shell       | shell / multi-term / shell-pop / xterm-color          | 第一次开 shell             |
+| shell       | shell / shell-pop / eat / xterm-color                    | 第一次开 shell             |
 | org         | Org 外观与键位                                        | 加载 org 时（启动期为 0）  |
 
 ** 注意：dired 那串键位不能写成 =:bind (:map dired-mode-map ...)=
@@ -240,7 +240,7 @@ language server、shellcheck 和语法库 =.dylib=。
 | basic    | easy-kill、hungry-delete                                              |
 | dired    | diredfl、dired-rainbow、dired-rsync                                   |
 | window   | eyebrowse、zoom-window                                                |
-| shell    | multi-term、shell-pop、xterm-color                                    |
+| shell    | eat、shell-pop、xterm-color                                               |
 
 权威清单在 init.el 的 =flywind-packages=；=package-selected-packages=
 （.local/etc/custom.el）由 =flywind-sync-package-selected-packages= 同步。

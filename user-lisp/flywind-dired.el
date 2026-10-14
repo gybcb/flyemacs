@@ -104,8 +104,6 @@
               ("C-c C-r" . dired-rsync)))
 
 ;;;; 附加功能
-(use-package dired-aux :ensure nil :defer t)
-
 (use-package dired-x
   :ensure nil
   :after dired

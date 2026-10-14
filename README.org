@@ -11,13 +11,31 @@ nginx.conf / tmux.conf / ssh_config / gitconfig / gitignore / gitattributes /
 
 1. 打开就校验：进 buffer 时 eglot 懒拉起 language server，语法错误当场标出来。
    只做语法层校验，不查 JSON Schema、不查语义规则。
-2. 启动尽量快：实测 ~0.16s~（暖缓存，~after-init-time - before-init-time~），
-   预算 ~0.6s~。启动期不起子进程、不递归扫 ~.el~、不联网刷包索引。
+2. 启动尽量快：暖缓存实测 ~after-init-time - before-init-time~ macOS ~0.17s~、
+   Linux（neomacs）~0.21s~–~0.25s~，预算 ~0.6s~（量法见「启动预算与测量」）。
+   启动期不起子进程、不递归扫 ~.el~、不联网刷包索引。
 
 为此删掉了原来的 IDE 化部分：lsp-bridge、company、yasnippet、neotree、jupyter、
 python 模块、color-rg、aweshell、三个 git submodule —— 细节见文末「已移除」。
 
 架构图见 [[file:ARCH.org][ARCH.org]]。
+
+同一套配置在两个平台跑：macOS（GNU Emacs 31 + Homebrew）与 Linux
+（CachyOS + neomacs）。差异集中列在下节，正文各节再展开。
+
+* 差异速览（macOS / Linux）
+
+| 项 | macOS | Linux（CachyOS） |
+|----+--------------------------------------------------+------------------------------------------------------|
+| Emacs 程序 | ~emacs~（Homebrew） | ~neomacs~（AUR ~neomacs-bin~，Rust 实现，ELisp 层兼容，自称 GNU Emacs 31.1） |
+| 外部程序安装 | ~brew~ | ~pacman~（npm 命令两平台通用） |
+| 语法库文件形态 | ~libtree-sitter-*.dylib~ | ~libtree-sitter-*.so~ |
+| 语法库编译前置 | git + cc + ~tree-sitter~ CLI | git + cc（neomacs 自带 Rust 侧语法生成，实测无需系统 CLI） |
+| GUI 浅深色信号 | ~defaults~ 读 macOS 外观 | 无 ~defaults~ → 兜底深色（见「主题」章） |
+| ~exec-path~ 注入 | Homebrew 目录生效 | Homebrew 目录不存在自动跳过；npm 全局在 ~/usr/bin~ 天然可寻，nvm 需自加 |
+| tree-sitter 加载 | GNU Emacs 开箱即用 | neomacs 不展开路径里的「~」，配置侧用绝对路径规避（见「已知取舍」） |
+| 启动实测（暖缓存） | ~0.17s~ | ~0.21s~–~0.25s~ |
+| 回归测试 | 192~194 项直接过 | 189 PASS / 3 FAIL / 6 SKIP；FAIL 全是 macOS 依赖用例（见「常用命令」） |
 
 * 目录结构
 
@@ -25,7 +43,7 @@ python 模块、color-rg、aweshell、三个 git submodule —— 细节见文�
 early-init.el      启动最早期：GC 策略、目录变量、exec-path、load-path、package.el
 init.el            package 初始化、包清单、自有文件字节编译、模块装载、体检命令
 user-lisp/         自有配置模块（flywind-*.el，共 9 个）
-tree-sitter/       语法库 .dylib（json/yaml/toml + 历史遗留的 bash/python/java/cpp）
+tree-sitter/       语法库 .so / .dylib（json/yaml/toml；macOS 机上另有历史遗留的 bash/python/java/cpp）
 .local/
   packages/elpa/   package.el 的安装目录（package-user-dir）
   etc/             非易失：custom.el、savehist
@@ -50,11 +68,23 @@ elpa/gnupg/        ELPA 签名校验用的 GPG keyring（保留原位置）
 | ~flywind-dired~     | dired 与着色                                  | ~:defer t~，开 dired 才算 |
 | ~flywind-window~    | windmove / zoom-window / eyebrowse / 分屏规则 | 变量 + autoload         |
 | ~flywind-git~       | magit                                         |  autoload，~C-x g~ 才加载 |
-| ~flywind-shell~     | shell / multi-term / shell-pop / xterm-color  | 全部懒加载              |
+| ~flywind-shell~     | shell / shell-pop / eat / xterm-color          | 全部懒加载              |
 | ~flywind-org~       | Org 外观与键位                                | ~with-eval-after-load~，零成本 |
 
 另外 ~user-lisp/flywind-tests.el~ 是主题那套的回归用例，~init.el~ 不加载它，
 要用时 ~M-x flywind-tests-run~（或走命令行 ~--batch~，见「常用命令」）。
+
+** 终端入口
+
+~F9~ 由 shell-pop 弹底部终端，默认走内置 ~ansi-term~；把
+~flywind-shell-pop-shell-type~ 设成 ~"eat"~ 可切到 eat（纯 Elisp 终端仿真，
+自带 char mode 与 shell 集成，零编译链，macOS / neomacs 两侧装完即用）。
+直接 ~M-x eat~ 走普通 buffer（~C-x 1~ 可顶满；不进底部 side window 名单，
+因为 side window 在 neomacs 里既不能被 C-x 1 顶满、也没有
+~toggle-window-share~）。
+不选 vterm：它需要 cmake + libvterm + 完整的 emacs-module API 编出
+~vterm-module.so~，本机 neomacs 跑不起来；MB 级突发输出场景 vterm 才明显
+更快，真有需要时再加，与 eat 不互斥。
 
 * 支持的格式与校验
 
@@ -111,16 +141,40 @@ server 不归闸门管（它们不走 package.el），装完包还要走本节�
 
 配置本身不含外部程序，缺了会怎样都写在 ~M-x flywind-check-config~ 里。
 
-#+begin_example
-# language server（JSON / YAML / TOML / shellcheck 前端）
-npm i -g yaml-language-server vscode-langservers-extracted taplo bash-language-server
-brew install shellcheck
+language server 的 npm 安装命令（JSON / YAML / shell）两平台相同：
 
-# 语法库：在 Emacs 里执行
+#+begin_example
+npm i -g yaml-language-server vscode-langservers-extracted bash-language-server
+#+end_example
+
+TOML server 与 shellcheck 按平台分开：
+
+- *macOS*：~brew install shellcheck~（shell 诊断前端）；~brew install taplo~
+  （带 LSP 的 taplo，官方 Homebrew formula）。
+- *Linux*（CachyOS）：~pacman -S shellcheck tombi~。TOML 用 ~tombi~：发行版
+  仓库有，npm 也有（~npm i -g tombi~，本机实测 ~tombi lsp~ 能正常启动）。
+  本机 npm 全局目录在 ~/usr/bin~（~prefix=/usr~），language server 装完
+  ~executable-find~ 直接能找到；走 nvm 的话要把它的 bin 目录加进
+  ~flywind-extra-exec-path~（见「启动预算与测量」）。
+
+~taplo~ 不要往 npm 命令行里加：npm 上没有叫 ~taplo~ 的包（404），
+官方 npm 包 ~@taplo/cli~ 的构建不含 LSP —— 本机实测其 ~taplo lsp stdio~ 报
+「the LSP is not part of this build」，装了 eglot 也用不了。taplo 的常规
+来源只有 brew（macOS）或 ~cargo install taplo-cli~；Linux 发行版仓库没有
+taplo，直接用 tombi。
+
+本配置的候选顺序（taplo 优先、否则 tombi，见 ~flywind-config-lsp-programs~）
+不变，装到哪个用哪个。
+
+语法库两平台相同，在 Emacs 里执行：
+
+#+begin_example
 M-x flywind-install-treesit-grammars
 #+end_example
 
-语法库装进 ~tree-sitter/~，需要 cc + ~tree-sitter~ CLI。
+语法库装进 ~tree-sitter/~（macOS 出 ~.dylib~、Linux 出 ~.so~）。GNU Emacs
+需要 git + cc + ~tree-sitter~ CLI；neomacs 的 Rust 侧自己生成语法，本机实测
+没有装系统 tree-sitter CLI 也能装成（要 git、cc）。
 Emacs 31 打开 ~.json~ 时默认会弹「grammar for `json' is missing; install it?」这种
 交互式提问（还会顺带联网），本配置关掉它（~treesit-auto-install-grammar~），
 改由上面那个命令显式安装。
@@ -131,12 +185,22 @@ Emacs 31 打开 ~.json~ 时默认会弹「grammar for `json' is missing; install
 很难看。所以判据按环境分开、各自独立：同一台机器可以一边开浅色 Ghostty、一边开深色
 iTerm，缓存按环境分格存，互不顶掉。
 
-| 环境              | 依据                                   | 结果                        |
-|-------------------+----------------------------------------+-----------------------------|
-| GUI               | macOS AppleInterfaceStyle              | 深色 -> doom-solarized-dark  |
-| Ghostty（两档主题） | macOS 外观                        | Dark -> dark            |
-| 其它终端（iTerm） | COLORFGBG 背景色号（iTerm 默认 12;8）  | 8 -> dark                   |
-| 认不出来          | 无信号                                 | 兜底 dark                   |
+判据按平台分开设，骨架相同：手动钉住优先，终端先看 COLORFGBG，GUI 与
+特殊终端走各自的探测器，全部认不出兜底深色。
+
+** 通用（跟随终端配色板的 COLORFGBG 信号）
+
+| 环境                        | 依据                                          | 结果      |
+|-----------------------------+-----------------------------------------------+-----------|
+| 导出 COLORFGBG 的终端（符合该约定的 xterm 系；iTerm 默认 12;8） | COLORFGBG 背景色号                  | 8 -> dark |
+| 认不出来                    | 无信号                                        | 兜底 dark |
+
+** macOS
+
+| 环境                | 依据                      | 结果                        |
+|---------------------+---------------------------+-----------------------------|
+| GUI                 | macOS AppleInterfaceStyle | 深色 -> doom-solarized-dark  |
+| Ghostty（两档主题） | macOS 外观              | Dark -> dark                |
 
 Ghostty 是个坑，而且坑了两层：
 
@@ -156,19 +220,32 @@ Ghostty 是个坑，而且坑了两层：
 明写只在 PGTK / Android / MS-Windows 构建里赋值 —— macOS 的 ns 构建不在其列，ns-win.el
 里也找不到任何读 NSAppearance 的代码。所以 Mac 上只能自己查 defaults（约 10ms）。
 
+- ns-appearance 故意不设：不设时 macOS 自己管窗口边框和标题栏、跟着系统走；
+  显式设成 dark / light 反而把边框钉死，从此和系统脱钩。
+
+** Linux（CachyOS + neomacs）
+
+- GUI 没有探测器：~defaults~ 是 macOS 的程序，~executable-find~ 找不到它，
+  ~flywind-theme--probe-command~ 返回 nil，GUI 直接走兜底深色。想要浅色用
+  ~M-x flywind-theme-toggle~ 现场切并钉住（写进本格缓存，下次启动沿用）。
+- 导出 COLORFGBG 的终端走上面「通用」那条，与 macOS 同一套代码。
+- Ghostty：本机未装、未实测。只从代码口径看：单档 / 静态 background 仍是解析
+  背景色算亮度，跨平台可用；**两档（light:X,dark:Y）**那条分支读的 macOS 外观
+  段在 Linux 恒为空，会判成浅色 —— 在 Linux 用 Ghostty 两档主题前先自己验证。
+
+** 要点与命令（两平台共用）
+
 要点：
 
 - 启动期稳态零子进程。先读本格缓存（.local/cache/theme-appearance，纯文件读）立刻载
   主题，不查系统、也不会「先深后浅」闪一下。本格第一次（无缓存）同步查一次：
-  defaults 约 10ms、Ghostty 那条约 20ms，实测冷启动 0.188s vs 常态 0.171s。不想花
+  defaults 约 10ms、Ghostty 那条约 20ms，macOS 实测冷启动 0.188s vs 常态 0.171s。不想花
   这一次就设 =flywind-theme-probe-at-startup= 为 nil。
 - 启动后马上再异步核对一次（=flywind-theme--start-watching= 里踢一脚）：缓存可能是
   上一个外观下留下的，等满一个轮询周期才纠正的话，中间这段主题就是错的。异步
   = 不占启动时间。之后才是焦点回来 / 每 flywind-theme-check-interval 秒。
 - 终端也载真主题、也跟着实时变（以前 emacs -nw 是裸 face，且只看启动快照）：载主题
   代价约 10ms，0.16s -> 0.17s。COLORFGBG 已经是准数的终端不装探测器，不白忙。
-- ns-appearance 故意不设：不设时 macOS 自己管窗口边框和标题栏、跟着系统走；显式设成
-  dark / light 反而把边框钉死，从此和系统脱钩。
 - 一个 Emacs 进程只能有一个主题方向（主题是全局的）。GUI 与终端混用同一进程时，
   用 M-x flywind-theme-toggle 现场切。
 
@@ -177,7 +254,7 @@ Ghostty 是个坑，而且坑了两层：
 - M-x flywind-theme-toggle — 手动在浅 / 深之间切并钉住，同时写进本格缓存（下次启动沿用）
 - M-x flywind-theme-follow-system — 取消钉住 + 抹掉本格缓存，重新跟随
 - M-x flywind-theme-report — 打印当前主题按什么定的：环境、各信号源、探测器命令、分格缓存
-  全表都列（GUI 分支在 Emacs.app 里跑一次即可确认）
+  全表都列（macOS 的 GUI 分支在 Emacs.app 里跑一次即可确认）
 - flywind-theme-light / flywind-theme-dark — 换主题对（doom-themes 里 13 个 light 变体可选）
 - flywind-theme-force — 钉住：nil 跟随 / light / dark（只管当前进程；跳重启靠缓存）
 - flywind-theme-check-interval — 轮询秒数，0 = 不轮询，只在启动和焦点回来时查
@@ -192,7 +269,7 @@ Ghostty 是个坑，而且坑了两层：
  ~flywind-modeline~；doom-modeline 连同它的依赖 nerd-icons 已从清单删除，
 想对比长相就 ~M-x flywind-modeline-mode -1~ 回 Emacs 默认那条（当场生效）。
 
-本机（Apple Silicon + Ghostty tty）交替测三轮：
+macOS（Apple Silicon + Ghostty tty）交替测三轮：
 
 | 实现               | 启动   | 单次渲染 | 相对默认 |
 |--------------------+--------+----------+----------|
@@ -258,10 +335,11 @@ lighter 是实打实的 ~ VHl~ / ~ ws~ / ~ Rbow~（实测），不抹就在 mode
 - ~M-x flywind-modeline-report~ — 当前 mode line 用哪条实现、图标开没开、单次
   渲染多少微秒，外加一行样例与可调变量。
 - ~M-x flywind-tests-run~ — 回归用例（主题跟随 + mode line + ELPA 编译 + 缺包闸门
-  + fill-column 竖线，共 198 项断言；实测本机 192~194 项直接过，其余因终端
-  环境 SKIP），明细在
-  ~*flywind-tests*~。缓存绑到临时文件，不碰 ~.local/cache~ 里真那份，跑完把主题
-  还原成跑之前的方向。命令行跑法见下。
+  + fill-column 竖线，共 198 项断言；macOS 实测 192~194 项直接过；Linux（neomacs）
+  实测 189 PASS / 3 FAIL / 6 SKIP，其中 3 个 FAIL 全是依赖 macOS 外观或本机
+  主机名的用例（GUI -> macos、focus hook 挂标记、tramp 长主机名截断），属环境
+  事实不是回归），明细在 ~*flywind-tests*~。缓存绑到临时文件，不碰
+  ~.local/cache~ 里真那份，跑完把主题还原成跑之前的方向。命令行跑法见下。
 - ~M-x flywind-install-treesit-grammars~ — 装 json/yaml/toml 语法库
 - ~M-x flywind-install-missing-packages~ — 刷索引并装 ~flywind-packages~ 里缺的包
 - ~M-x flywind-sync-package-selected-packages~ — 把 ~flywind-packages~ 同步进
@@ -290,14 +368,16 @@ emacs --batch -l early-init.el -l init.el -l user-lisp/flywind-tests.el \
       --eval "(flywind-tests-run-batch)"
 #+end_src
 
-全过退出码 0；有失败退出码 1，并打印期望 / 实得。
+全过退出码 0；有失败退出码 1，并打印期望 / 实得。Linux 把 ~emacs~ 换成
+~neomacs~，其余相同（本机实测可跑通）。
 
 启动期不联网：不 ~package-refresh-contents~、不用 ~:ensure~。
 
 * 启动预算与测量
 
-预算：暖缓存 ~after-init-time - before-init-time < 0.6s~。本机实测 ~0.172s~–~0.178s~
-（暖缓存连跑三趟）。~emacs -nw~ 要有 tty，非交互 shell 里用 ~script~ 造一个：
+预算：暖缓存 ~after-init-time - before-init-time < 0.6s~。macOS（GNU Emacs，暖缓存
+连跑三趟）实测 ~0.172s~–~0.178s~；Linux（neomacs，暖缓存连跑三趟）实测
+~0.214s~–~0.251s~。~emacs -nw~（Linux 上是 ~neomacs -nw~）要有 tty，非交互 shell 里用 ~script~ 造一个：
 
 #+begin_example
 cat > /tmp/st.el <<'EOF'
@@ -313,18 +393,23 @@ for i in 1 2 3; do script -q /dev/null emacs -nw -l /tmp/st.el >/dev/null 2>&1; 
 cat /tmp/startup.txt
 #+end_example
 
+Linux 的 util-linux ~script~ 不吃位置命令参数，循环里那行改用 ~-c~ 形式：
+~script -q /dev/null -c "neomacs -nw -l /tmp/st.el" >/dev/null 2>&1~。
+
 ~--eval~ /~-l~ 里的 ~after-init-time~ 还是 ~nil~（它在命令行参数处理完之后才赋值），
 所以要挂 ~emacs-startup-hook~。
 
-这 ~50ms~ 是 ~elpa/~ 里 ~.elc~ 齐不齐的差价，同一套量法实测：把 101 个 ~.elc~ 临时改名
+这 ~50ms~ 是 ~elpa/~ 里 ~.elc~ 齐不齐的差价（macOS 同一套量法实测）：把 101 个 ~.elc~ 临时改名
 移开 → ~0.224s~–~0.232s~；放回来 → ~0.172s~–~0.178s~。也就是说 ELPA 只剩源码时，每次
 加载都在现场解析 ~.el~，那是加载成本而不是噪音（噪音是顺带的那条 cookie 告警）。
 补齐走 ~M-x flywind-byte-compile-packages~。
 
 启动期不起子进程：~exec-path~ 用 ~flywind-extra-exec-path~ 静态注入
 （/opt/homebrew/bin、/opt/homebrew/sbin、/usr/local/bin、~/.local/bin，不存在就跳过），
-取代 ~exec-path-from-shell~ 的 ~bash -l~ 子进程。从 Dock 启动的 Emacs 拿不到
-shell 的 PATH，这里也是它的补救点 —— 换了别的环境就改这个变量。
+取代 ~exec-path-from-shell~ 的 ~bash -l~ 子进程。macOS 从 Dock 启动的 Emacs 拿不到
+shell 的 PATH，这里也是它的补救点 —— 换了别的环境就改这个变量。Linux 上
+Homebrew 路径不存在自动跳过；npm 全局装在 ~/usr/bin~（本机 ~prefix=/usr~）时
+已在默认 ~exec-path~ 里，不用动；走 nvm 的话把它的 bin 目录加进来。
 
 * 按键
 
@@ -368,7 +453,7 @@ doom-themes
 easy-kill hungry-delete volatile-highlights
 rainbow-mode rainbow-delimiters
 diredfl dired-rainbow dired-rsync
-multi-term shell-pop xterm-color
+eat shell-pop xterm-color
 eyebrowse zoom-window
 #+end_example
 
@@ -392,6 +477,8 @@ eyebrowse zoom-window
   doom-modeline 从来没生效，且每次重绘比默认那条贵 2.7 倍）
 - diminish → ~flywind-hide-minor-mode-lighter~（flywind-basic.el，自己改
   ~minor-mode-alist~；三处 ~:diminish~ 改成 :config 里直接调）
+- multi-term → shell-pop 的 ANSI term 走内置 ~term.el~ 的 ~ansi-term~：
+  ~M-x multi-term~ 那套命令在本配置里从没绑过键、也没有调用点
 - lsp-bridge（连同 nox / awesome-tray / awesome-pair submodule）→ 内置 eglot
 - company、company-posframe、posframe、yasnippet
 - neotree
@@ -407,6 +494,13 @@ eyebrowse zoom-window
 
 * 已知取舍
 
+- neomacs（Linux 在用）的 tree-sitter 加载器不展开路径里的 ~=~：它的
+  ~user-emacs-directory~ 是字面量 ="~/.emacs.d/"=，语法库目录照原样交给
+  dlopen 就会「.so 明明装好却报 dlopen failed (not-found)」，parser 创建
+  失败。配置侧规避：~flywind-config-grammar-dir~ 取 ~expand-file-name~
+  后的绝对路径，并把同一绝对目录加进 ~treesit-extra-load-path~（GNU Emacs
+  不受影响，多一条搜索路径无害）。根因在上游，适合向 neomacs 报
+  「treesit loader does not expand ~ in search paths」。
 - ELPA 缺任何一个包就整批不装自有模块，不做「能装多少算多少」的半套启动：
   缺包时模块只能以源码被加载，文件头的 =eval-when-compile (require ...)= 会在
   装载期直接报错（实测 =Eager macro-expansion failure=），逐包加 =nil t= 也只是把
@@ -436,9 +530,11 @@ eyebrowse zoom-window
   挂在 ~minor-mode-alist~ 上，抹 lighter 只改一个表就够。
 - ini / ~.env~ / nginx / tmux / ssh_config / gitconfig 只高亮不校验：没有可靠的
   LSP，宁可没有诊断也不要错得离谱的诊断。
-- TOML 有两个候选：~taplo~ 与 ~tombi~（Emacs 31 eglot 默认项）。装了 taplo 就用
-  taplo；本机现在用的是 tombi。改了 ~flywind-config-lsp-programs~ 要重启 Emacs
-  ——~eglot-server-programs~ 只在 eglot 加载时算一次。
+- TOML 有两个候选：~taplo~ 与 ~tombi~（Emacs 31 eglot 默认项），按
+  ~flywind-config-lsp-programs~ 的顺序，装了 taplo 就用 taplo，否则用 tombi。
+  安装途径见「装依赖」：taplo 只能 brew / cargo，npm 版不带 LSP。
+  改了 ~flywind-config-lsp-programs~ 要重启 Emacs ——~eglot-server-programs~
+  只在 eglot 加载时算一次。
 - 自有 ~.el~ 冷编译（先删 ~.elc~）必须零告警，不是「能过就行」。三类告警各有固定
   解法，实测都落在本配置里：
   * 在 =with-eval-after-load= 里写别的包的变量（=eglot-server-programs=

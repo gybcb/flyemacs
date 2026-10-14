@@ -36,7 +36,7 @@
     hungry-delete
     volatile-highlights rainbow-mode rainbow-delimiters
     diredfl dired-rainbow dired-rsync
-    multi-term shell-pop xterm-color
+    eat shell-pop xterm-color
     eyebrowse zoom-window)
   "本配置需要的 ELPA 包清单（内置包不列入）。
 language server 与 tree-sitter 语法库也不列入：它们不走 package.el，

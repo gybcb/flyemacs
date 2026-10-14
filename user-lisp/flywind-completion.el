@@ -112,8 +112,5 @@
   :config
   (which-key-mode 1))
 
-;; ---------------------------------------------------------------------------
-;; 项目命令：Emacs 31 内置 project.el（不再引入 projectile）
-;; ---------------------------------------------------------------------------
 (provide 'flywind-completion)
 ;;; flywind-completion.el ends here
